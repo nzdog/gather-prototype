@@ -945,22 +945,37 @@ async function main() {
         modelBlock(schemaNow, 'EmailBlock').text.length > 0 &&
         modelBlock(schemaNow, 'EmailBlock').text === modelBlock(schemaBase, 'EmailBlock').text
     );
-    const hunks = baseOk
+    // ⚠ 19.10 ASKED FROM THE BASE TO c686175 SINCE [[GTC-478]] (23 Nov 2026, the founder's ruling 2
+    // on its plan: "Yes to the older checks you listed being compared at fixed commits ending at
+    // c686175"). GTC-478 changes the schema outside PersonEvent on purpose (Day's order and the
+    // SessionAbsence model). 19.10 now reads the diff from the base to c686175, main's tip when
+    // GTC-478 began, and PersonEvent as it stands there: the same question, the same strictness,
+    // for the history up to c686175. 19.9 above still reads the working folder.
+    const FROZEN_1910 = 'c686175';
+    let frozenOk = false;
+    try {
+      git(['cat-file', '-e', `${FROZEN_1910}^{commit}`]);
+      frozenOk = baseOk;
+    } catch {
+      frozenOk = false;
+    }
+    const schemaFrozen = frozenOk ? git(['show', `${FROZEN_1910}:prisma/schema.prisma`]) : '';
+    const hunks = frozenOk
       ? [
-          ...git(['diff', '-U0', BASE, '--', 'prisma/schema.prisma']).matchAll(
+          ...git(['diff', '-U0', BASE, FROZEN_1910, '--', 'prisma/schema.prisma']).matchAll(
             /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@/gm
           ),
         ]
       : [];
-    const peNow = modelBlock(schemaNow, 'PersonEvent');
+    const peNow = modelBlock(schemaFrozen, 'PersonEvent');
     const peBase = modelBlock(schemaBase, 'PersonEvent');
     const inside = (start: number, count: number, b: { first: number; last: number }) =>
       count === 0
         ? start >= b.first && start < b.last
         : start >= b.first && start + count - 1 <= b.last;
     assert(
-      '19.10 every change to the schema lies inside model PersonEvent (the marker), none elsewhere',
-      baseOk &&
+      '19.10 every change to the schema from the base to c686175 lies inside model PersonEvent (the marker), none elsewhere',
+      frozenOk &&
         hunks.length > 0 &&
         hunks.every(
           (h) =>

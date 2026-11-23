@@ -85,6 +85,41 @@ const added = [...new Set([...trackedAdded, ...untracked])];
 const baseFiles = baseOk ? names(git(['ls-tree', '-r', '--name-only', '-z', BASE])) : [];
 const baseHas = (p: string) => baseFiles.includes(p);
 
+/*
+ * ⚠ FOUR CHECKS ASKED AT FIXED COMMITS SINCE [[GTC-478]] (23 Nov 2026, the founder's ruling 2 on its
+ * plan: "Yes to the older checks you listed being compared at fixed commits ending at c686175").
+ * GTC-478 adds a route file, a migration, two classification entries (one corrected) and one test
+ * script, on purpose. R1, R2, Z9 and P2 therefore compare the base with c686175 (main's tip when
+ * GTC-478 began, the merge of GTC-477) instead of with the working folder: the same question, the
+ * same strictness, for the history up to c686175. Every other check here still reads the working
+ * folder. A commit missing from the checkout turns them red, so none can pass by looking at nothing.
+ */
+const GTC478_FROZEN = 'c686175';
+let frozenOk = false;
+try {
+  git(['cat-file', '-e', `${GTC478_FROZEN}^{commit}`]);
+  frozenOk = baseOk;
+} catch {
+  frozenOk = false;
+}
+const frozenChanged = frozenOk
+  ? names(git(['diff', '--no-renames', '--name-only', '-z', BASE, GTC478_FROZEN, '--']))
+  : [];
+const frozenAdded = frozenOk
+  ? names(
+      git([
+        'diff',
+        '--no-renames',
+        '--name-only',
+        '-z',
+        '--diff-filter=A',
+        BASE,
+        GTC478_FROZEN,
+        '--',
+      ])
+    )
+  : [];
+
 const onDisk = (p: string) => path.join(ROOT, p);
 const read = (p: string) => fs.readFileSync(onDisk(p), 'utf8');
 const isCode = (p: string) => /\.(ts|tsx)$/.test(p);
@@ -102,8 +137,21 @@ const GTC472_SRC = [
   'src/lib/guest/guest-amount.ts',
 ];
 /** The new source files: added since the base, under src, that are code (GTC-472's five are named out). */
+/*
+ * ⚠ ONE NAMED FILE AT [[GTC-478]] (23 Nov 2026, under the founder's standing word on older pins: a
+ * check red only because of a change approved there may be moved, the narrowest change). The new
+ * session route imports the server (it is a route, like GTC-472's share route above) and logs its
+ * errors, so it is named out of the new files' scans (N) by its exact path. GTC-478's two other new
+ * src files, src/lib/sessions/switch.ts and input.ts, import nothing and stay in the scans.
+ */
+const GTC478_SRC = ['src/app/api/events/[id]/days/[dayId]/route.ts'];
 const newSrc = added.filter(
-  (p) => p.startsWith('src/') && isCode(p) && !GTC472_SRC.includes(p) && fs.existsSync(onDisk(p))
+  (p) =>
+    p.startsWith('src/') &&
+    isCode(p) &&
+    !GTC472_SRC.includes(p) &&
+    !GTC478_SRC.includes(p) &&
+    fs.existsSync(onDisk(p))
 );
 
 /** True when the file now is exactly the file at the base, byte for byte. */
@@ -135,11 +183,11 @@ function main() {
   // ── R: no new route, no route classification ───────────────────────────────
   section('R — no new route');
   const SHARE_ROUTE = 'src/app/api/events/[id]/items/[itemId]/share/route.ts';
-  const newApi = added.filter((p) => p.startsWith('src/app/api/') && p !== SHARE_ROUTE);
+  const newApi = frozenAdded.filter((p) => p.startsWith('src/app/api/') && p !== SHARE_ROUTE);
   report(
     'R1',
-    'no file is ADDED under src/app/api (a page under src/app is allowed, ruling 53)',
-    baseOk && baseFiles.some((p) => p.startsWith('src/app/api/')) && newApi.length === 0,
+    'no file is ADDED under src/app/api (a page under src/app is allowed, ruling 53), from the base to c686175 (GTC-478)',
+    frozenOk && baseFiles.some((p) => p.startsWith('src/app/api/')) && newApi.length === 0,
     newApi
   );
   // ⚠ ONE NAMED ENTRY AT [[GTC-472]] (founder ruling D2 A, 22 Nov 2026: "one new entry in
@@ -154,22 +202,19 @@ function main() {
     '    "authEvidence": ["requireEventRole"],\n' +
     '    "securityIssues": []\n' +
     '  },\n';
-  const classNow =
-    baseOk && fs.existsSync(onDisk('route-classifications.json'))
-      ? read('route-classifications.json')
-      : '';
+  const classNow = frozenOk ? git(['show', `${GTC478_FROZEN}:route-classifications.json`]) : '';
   const classBase =
     baseOk && baseHas('route-classifications.json')
       ? git(['show', `${BASE}:route-classifications.json`])
       : '';
   report(
     'R2',
-    "route-classifications.json is the base's, byte for byte, but for the one share-route entry (GTC-472)",
-    baseOk &&
+    "route-classifications.json is the base's, byte for byte, but for the one share-route entry (GTC-472), read at c686175 (GTC-478)",
+    frozenOk &&
       classBase.length > 0 &&
       classNow.split(SHARE_ENTRY).length === 2 &&
       classNow.replace(SHARE_ENTRY, '') === classBase,
-    changed.filter((p) => p.endsWith('route-classifications.json'))
+    frozenChanged.filter((p) => p.endsWith('route-classifications.json'))
   );
 
   // ── Z: the areas Stage 3 may not touch ─────────────────────────────────────
@@ -212,14 +257,18 @@ function main() {
     const NAMED: Record<string, string[]> = {
       Z10: ['tests/security-route-scan-control.ts', 'tests/security-validation.ts'],
     };
-    const hit = changed.filter(
+    // ⚠ Z9 ASKED FROM THE BASE TO c686175 SINCE [[GTC-478]] (the founder's ruling 2 on its plan; see
+    // GTC478_FROZEN above): GTC-478's migration is in prisma/ on purpose. Every other zone reads the
+    // working folder as before.
+    const frozen = z.id === 'Z9';
+    const hit = (frozen ? frozenChanged : changed).filter(
       (p) => !(NAMED[z.id] ?? []).includes(p) && watch.some((x) => p.startsWith(x))
     );
     const missing = z.prefixes.filter((x) => !baseFiles.some((p) => p.startsWith(x)));
     report(
       z.id,
       `the diff lists nothing in ${z.label}`,
-      baseOk && missing.length === 0 && hit.length === 0,
+      (frozen ? frozenOk : baseOk) && missing.length === 0 && hit.length === 0,
       missing.length ? { notInBase: missing } : hit
     );
   }
@@ -333,8 +382,17 @@ function main() {
       false
     );
   }
-  if (pkgNow && pkgBase) {
-    const newKeys = Object.keys(pkgNow.scripts).filter((k) => !(k in pkgBase.scripts));
+  // ⚠ P2 READS package.json AT c686175 SINCE [[GTC-478]] (the founder's ruling 2 on its plan; see
+  // GTC478_FROZEN above): GTC-478 adds test:sessions-foundation on purpose. Same question, same
+  // strictness, for the scripts added up to c686175.
+  let pkgP2: any = null;
+  try {
+    pkgP2 = frozenOk ? JSON.parse(git(['show', `${GTC478_FROZEN}:package.json`])) : null;
+  } catch {
+    pkgP2 = null;
+  }
+  if (pkgP2 && pkgBase) {
+    const newKeys = Object.keys(pkgP2.scripts).filter((k) => !(k in pkgBase.scripts));
     const EIGHT = ['store', 'page', 'load', 'picker', 'match', 'form', 'placed', 'untouched'].map(
       (n) => `test:contacts-${n}`
     );

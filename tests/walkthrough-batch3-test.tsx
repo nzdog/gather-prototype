@@ -462,10 +462,12 @@ async function runInMemory() {
     }, 0);
   // ⚠ 112 → 113 AT [[GTC-472]] (22 Nov 2026, founder ruling on the report: "a count up by exactly one"):
   // the share route, `items/[itemId]/share/route.ts`.
+  // ⚠ 113 → 114 AT [[GTC-478]] (23 Nov 2026, the founder's ruling 2 on its plan: "route files 114"): the
+  // session route, `days/[dayId]/route.ts`.
   assert(
     '4',
-    '4k CONTROL: no new API route — src/app/api still has 113 route.ts (the share route, GTC-472, is the one added)',
-    routes(join(process.cwd(), 'src/app/api')) === 113
+    '4k CONTROL: no new API route — src/app/api still has 114 route.ts (the share route, GTC-472, and the session route, GTC-478, are the ones added)',
+    routes(join(process.cwd(), 'src/app/api')) === 114
   );
   assert(
     '4',
