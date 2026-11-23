@@ -3488,6 +3488,12 @@ async function testSuite18_LinkRoutesStayInTheirEvent(fixtures: Fixtures) {
 // is the dish's own current day, so an old dish whose day is already off the event can still be
 // edited.
 //
+// [[GTC-477]] (23 Nov 2026, the founder's word: "Extend GTC-403's checks to the create route; weaken
+// none"): a fourth route. The host's POST /api/events/[id]/teams/[teamId]/items read no day at all,
+// so a day picked in the host's Add item box was thrown away. It now reads one, with the same check
+// and the same 400. Its three checks follow the coordinator's create below, and no check above them
+// is changed.
+//
 // The checks:
 //   Part A (a) a guest link for event A naming the guest's own assignment on event B: the 404,
 //              and nothing changes (the assignment, the history, the OutboundMessage count).
@@ -3946,6 +3952,55 @@ async function testSuite19_AnswerAndDayStayInTheirEvent(fixtures: Fixtures) {
         logTest(
           `B(${word}) ${label} with ${what} — still 200, and the dish is made on A's Team A with that day`,
           r.status === 200 &&
+            made !== null &&
+            made.teamId === teamA.id &&
+            made.dayId === dayId &&
+            (await outboundCount()) === outbound,
+          `got ${r.status} ${JSON.stringify(r.json)}`
+        );
+      }
+    }
+    // [[GTC-477]] The host's create, on her session for A: the same three questions as the
+    // coordinator's create. It answers 201 when it makes a dish.
+    {
+      const create = (body: Record<string, unknown>) =>
+        send('POST', `/api/events/${evA.id}/teams/${teamA.id}/items`, body, HOST_COOKIE);
+      const dishesOnTeam = () => prisma.item.count({ where: { teamId: teamA.id } });
+      const label = "POST /api/events/:A/teams/:teamA/items (the host's create)";
+      {
+        const dishes = await dishesOnTeam();
+        const onDayB = () => prisma.item.count({ where: { dayId: dayB.id, teamId: teamA.id } });
+        const onDayBBefore = await onDayB();
+        const counts = await writeCounts();
+        const r = await create({ name: `${GTC403_TAG} host created with B's day`, dayId: dayB.id });
+        logTest(
+          `B(a) ${label} with a day of event B — refused 400 "${GTC403_DAY_NOT_ON_EVENT}"`,
+          r.status === 400 && r.json?.error === GTC403_DAY_NOT_ON_EVENT,
+          `got ${r.status} ${JSON.stringify(r.json)}`
+        );
+        logTest(
+          '  ...and no dish was made',
+          (await dishesOnTeam()) === dishes && (await onDayB()) === onDayBBefore,
+          `dishes ${dishes} -> ${await dishesOnTeam()}; on day B ${onDayBBefore} -> ${await onDayB()}`
+        );
+        logTest(
+          '  ...and no ledger row was written, and the OutboundMessage count is the same',
+          (await writeCounts()) === counts,
+          `before ${counts}, after ${await writeCounts()}`
+        );
+      }
+      for (const [dayId, what, word] of [
+        [dayA.id, 'a day of event A', 'b'],
+        [null, 'no day (null)', 'c'],
+      ] as const) {
+        const outbound = await outboundCount();
+        const r = await create({ name: `${GTC403_TAG} host created with ${what}`, dayId });
+        const made = r.json?.item?.id
+          ? await prisma.item.findUnique({ where: { id: r.json.item.id } })
+          : null;
+        logTest(
+          `B(${word}) ${label} with ${what} — 201, and the dish is made on A's Team A with that day`,
+          r.status === 201 &&
             made !== null &&
             made.teamId === teamA.id &&
             made.dayId === dayId &&

@@ -25,6 +25,8 @@
  *   W  every write site in src/ that stores a name tidies it — structural, discovered not listed
  *   H  the host routes — structural: they read a session cookie and cannot be driven in-process
  *   C  the coordinator routes — driven in-process against gather_dev, on real rows
+ *   D  [[GTC-477]] the days: the coordinator link's GET (in-process, own rows), the coordinator's
+ *      Day list and the host's add route (structural)
  *   U  the three add forms — structural: the toggle, the "Do the" lead, the kind sent
  *   S  the seed scripts — no item name begins with an article
  *
@@ -47,6 +49,8 @@ import {
 import { mayHoldRow } from '../src/lib/assignment/same-team';
 import { POST as coordinatorPOST } from '../src/app/api/c/[token]/items/route';
 import { PATCH as coordinatorPATCH } from '../src/app/api/c/[token]/items/[itemId]/route';
+// [[GTC-477]] Layer D: the coordinator link's GET, for the event's days.
+import { GET as coordinatorGET } from '../src/app/api/c/[token]/route';
 
 const prisma = new PrismaClient();
 const ROOT = path.resolve(__dirname, '..');
@@ -560,6 +564,139 @@ async function main() {
       'C',
       'a blank name sent to the PATCH is refused with 400, and the name is unchanged',
       blanked.status === 400 && afterBlank?.name === 'trifle'
+    );
+
+    // ─────────────────────────────────────────────────────────────────────────
+    section('Layer D (GTC-477): the days the add forms offer and keep');
+    // ─────────────────────────────────────────────────────────────────────────
+    // [[GTC-477]] (23 Nov 2026, the founder's rulings on the plan, 1: "Approved as planned"). Fault 2:
+    // the coordinator's Day list offered only the first dish's day, because the coordinator link's
+    // GET returned no list of the event's days. Fault 1: the host's add route threw a sent day away.
+    // On this suite's own rows: an event whose three days are made out of date order, and a second
+    // event with a day of its own. The link is made already opened, so the GET writes nothing.
+
+    const dStart = new Date(Date.now() + 40 * DAY);
+    const dayEvent = await prisma.event.create({
+      data: {
+        name: `GTC-477 days ${stamp}`,
+        startDate: dStart,
+        endDate: new Date(dStart.getTime() + 2 * DAY),
+        hostId: host.id,
+      },
+    });
+    createdEventIds.push(dayEvent.id);
+    const otherEvent = await prisma.event.create({
+      data: {
+        name: `GTC-477 other event ${stamp}`,
+        startDate: dStart,
+        endDate: dStart,
+        hostId: host.id,
+      },
+    });
+    createdEventIds.push(otherEvent.id);
+    const dayTeam = await prisma.team.create({
+      data: { eventId: dayEvent.id, name: 'Mains', coordinatorId: coord.id },
+    });
+    const dayLink = `gtc477-${stamp}`;
+    const opened = new Date(Date.now() - DAY);
+    await prisma.accessToken.create({
+      data: {
+        token: dayLink,
+        scope: 'COORDINATOR',
+        eventId: dayEvent.id,
+        personId: coord.id,
+        teamId: dayTeam.id,
+        openedAt: opened,
+      },
+    });
+    const makeDay = (eventId: string, name: string, offsetDays: number) =>
+      prisma.day.create({
+        data: { eventId, name, date: new Date(dStart.getTime() + offsetDays * DAY) },
+      });
+    const third = await makeDay(dayEvent.id, 'GTC-477 third day', 2);
+    const first = await makeDay(dayEvent.id, 'GTC-477 first day', 0);
+    const second = await makeDay(dayEvent.id, 'GTC-477 second day', 1);
+    const elsewhere = await makeDay(otherEvent.id, 'GTC-477 day of the other event', 1);
+
+    let reply: any = null;
+    try {
+      const res = await coordinatorGET({ headers: new Headers() } as any, {
+        params: Promise.resolve({ token: dayLink }),
+      });
+      reply = { status: res.status, json: await res.json() };
+    } catch (e) {
+      reply = { status: -1, json: { error: String(e) } };
+    }
+    const dayIds: string[] = Array.isArray(reply?.json?.days)
+      ? reply.json.days.map((d: { id: string }) => d.id)
+      : [];
+    assert(
+      'D',
+      "D1 the coordinator link's GET lists its event's three days, in date order (made out of order)",
+      reply?.status === 200 &&
+        JSON.stringify(dayIds) === JSON.stringify([first.id, second.id, third.id]) &&
+        reply.json.days.every(
+          (d: { name: unknown; date: unknown }) =>
+            typeof d.name === 'string' && typeof d.date === 'string'
+        )
+    );
+    assert(
+      'D',
+      '  D2 ...and no day of another event',
+      reply?.status === 200 && Array.isArray(reply?.json?.days) && !dayIds.includes(elsewhere.id)
+    );
+    // The route marks a first open after it answers; give a stray write time to land.
+    await new Promise((r) => setTimeout(r, 500));
+    const linkAfter = await prisma.accessToken.findUnique({ where: { token: dayLink } });
+    const openLines = await prisma.inviteEvent.count({ where: { eventId: dayEvent.id } });
+    assert(
+      'D',
+      '  D3 CONTROL: the GET wrote nothing (the link was already opened; no invite-log line)',
+      reply?.status === 200 &&
+        linkAfter?.openedAt?.getTime() === opened.getTime() &&
+        openLines === 0
+    );
+
+    const coordPage = code('src/app/c/[token]/page.tsx');
+    // The Day list: from its onChange to its closing tag.
+    const dayList =
+      coordPage.match(/setNewItem\(\{ \.\.\.newItem, dayId:[\s\S]*?<\/select>/)?.[0] ?? '';
+    const options = dayList.match(/<option\b[^>]*>/g) ?? [];
+    assert(
+      'D',
+      'D4 the coordinator\'s Day list offers "All days" first, then every day of data.days by name, and not the first dish\'s day',
+      options.length === 2 &&
+        /<option value="">All days<\/option>/.test(dayList) &&
+        dayList.indexOf('All days') < dayList.indexOf('(data.days ?? []).map(') &&
+        /<option key=\{day\.id\} value=\{day\.id\}>\s*\{day\.name\}\s*<\/option>/.test(dayList) &&
+        !coordPage.includes('data.items[0]?.day') &&
+        !coordPage.includes('Select day...')
+    );
+    assert(
+      'D',
+      "D5 the coordinator page's data declares the event's days",
+      /interface CoordinatorData \{[\s\S]*?\bdays\??: \{ id: string; name: string; date: string \}\[\];[\s\S]*?\n\}/.test(
+        coordPage
+      )
+    );
+
+    const hostAdd = code('src/app/api/events/[id]/teams/[teamId]/items/route.ts');
+    const dayCheckAt = hostAdd.search(
+      /prisma\.day\.findFirst\(\{\s*where: \{ id: body\.dayId, eventId \}/
+    );
+    const createAt = hostAdd.indexOf('prisma.item.create(');
+    assert(
+      'D',
+      "D6 the host's add route asks that a sent day is a day of this event, and refuses in the shared words, before the create",
+      dayCheckAt > 0 &&
+        createAt > dayCheckAt &&
+        hostAdd.slice(dayCheckAt, createAt).includes("'That day is not on this event'") &&
+        /status: 400/.test(hostAdd.slice(dayCheckAt, createAt))
+    );
+    assert(
+      'D',
+      "D7 the host's add route saves the day on the dish it makes",
+      /itemData\.dayId = body\.dayId/.test(hostAdd.slice(dayCheckAt, createAt))
     );
 
     // ─────────────────────────────────────────────────────────────────────────

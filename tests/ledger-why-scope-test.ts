@@ -206,12 +206,15 @@ for (const field of ASK_FIELDS) {
     whyTrigger(editItem(field, 'ACCEPTED'), SENT) === 'T4'
   );
 }
+// ⚠ MOVED AT [[GTC-477]] (23 Nov 2026, the founder's Q13: "changing a dish's session counts as
+// changing the ask"): 'dayId' was on this host-side list. The guest page shows a dish's day, so the
+// day is part of the ask. Its check below is the same edit with the answer it now gives, T4; the loop
+// over ASK_FIELDS above also covers it once the ledger lists it.
 for (const field of [
   'description',
   'notes',
   'critical',
   'displayOrder',
-  'dayId',
   'prepStartTime',
   'dietaryTags',
 ]) {
@@ -220,6 +223,14 @@ for (const field of [
     whyTrigger(editItem(field, 'ACCEPTED'), SENT) === null
   );
 }
+assert(
+  '[GTC-477, Q13] "dayId", a host-side field until 23 Nov 2026, on an ACCEPTED item → T4',
+  whyTrigger(editItem('dayId', 'ACCEPTED'), SENT) === 'T4'
+);
+assert(
+  '[GTC-477] CONTROL: a dayId change on a PENDING item → NO trigger (the typo rule holds for a day)',
+  whyTrigger(editItem('dayId', 'PENDING'), SENT) === null
+);
 assert(
   'EDIT_ITEM with no field named → no trigger',
   whyTrigger(

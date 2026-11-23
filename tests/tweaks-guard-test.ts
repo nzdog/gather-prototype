@@ -245,8 +245,12 @@ const PROTECTED: Entry[] = [
       "GTC-442: suite 11 on the copy shape; the scan pins for the sixth cron route; GTC-472: the scan's counts for the share route",
     plus: [
       {
+        // ⚠ HASH MOVED AT [[GTC-477]] (23 Nov 2026, the founder's ruling 2 on its plan: "The security suite
+        // grows from 257 to 262 checks. Yes to moving tweaks-guard G19's fingerprint ... with a dated note.
+        // No existing security check is changed or weakened."): suite 19 Part B gains the host's create, five
+        // checks and their note, and nothing else. The d0a74ed5... it replaced was the text at 1372817.
         file: 'tests/security-validation.ts',
-        sha256: 'd0a74ed5dd10f9db7e0bba191afe9b60580962c09f090fc0f16c1e31c0ec5e2f',
+        sha256: 'ebccc90d1f09791a12f42d901717d2130b59a5f12426b99a3ba894f6559ea58d',
         edited: true,
       },
       {

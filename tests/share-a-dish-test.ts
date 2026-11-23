@@ -1832,7 +1832,26 @@ async function main() {
     const git = (args: string[]) =>
       spawnSync('git', ['--literal-pathspecs', ...args], { cwd: ROOT, encoding: 'utf8' });
     const baseOk = git(['cat-file', '-e', `${GTC472_BASE}^{commit}`]).status === 0;
-    const changed = git(['diff', '--name-only', GTC472_BASE, '--', ...FORBIDDEN]).stdout.trim();
+    // ⚠ THREE FILES ASKED AT A FIXED COMMIT SINCE [[GTC-477]] (23 Nov 2026, the founder's ruling 2 on
+    // its plan: "ledger.ts and the two item routes are checked as unchanged between 4e7dfa1 and
+    // 1372817 instead of against the working folder. Everything else on J2 stays live."). GTC-477
+    // edits them on purpose (a day sent to the add route is kept; the day is an ask field). They are
+    // taken out of the live list by exact name, and must be unchanged from this base to GTC-477's
+    // base, 1372817.
+    const GTC477_BASE = '1372817';
+    const GTC477_FILES = [
+      'src/app/api/events/[id]/items/[itemId]/route.ts',
+      'src/app/api/events/[id]/teams/[teamId]/items/route.ts',
+      'src/lib/ledger.ts',
+    ];
+    const gtc477Ok =
+      git(['cat-file', '-e', `${GTC477_BASE}^{commit}`]).status === 0 &&
+      GTC477_FILES.every((f) => FORBIDDEN.includes(f)) &&
+      git(['diff', '--quiet', GTC472_BASE, GTC477_BASE, '--', ...GTC477_FILES]).status === 0;
+    const changed = git(['diff', '--name-only', GTC472_BASE, '--', ...FORBIDDEN])
+      .stdout.split('\n')
+      .filter((f) => f !== '' && !GTC477_FILES.includes(f))
+      .join('\n');
     const untracked = git([
       'ls-files',
       '--others',
@@ -1843,7 +1862,7 @@ async function main() {
     assert('J1 the base commit is in this checkout, so the checks below mean something', baseOk);
     assert(
       'J2 nothing under the send, the nudges, the decide-by clock, the board, the assign and items routes, the ledger, auth, Stripe or the schema is changed or added',
-      baseOk && changed === '' && untracked === '',
+      baseOk && gtc477Ok && changed === '' && untracked === '',
       `${changed} ${untracked}`
     );
     const files = git(['diff', '--name-only', GTC472_BASE]).stdout.split('\n').filter(Boolean);
