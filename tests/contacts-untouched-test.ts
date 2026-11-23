@@ -205,7 +205,13 @@ function main() {
     const watch = [...z.prefixes, ...(z.alsoWatch ?? [])];
     // ⚠ ONE NAMED FILE AT [[GTC-472]] (22 Nov 2026): Z10 passes over the scan control's counts, which the
     // founder ruled (D2 A, "Counts only"); tests/tweaks-guard-test.ts pins that file's whole text by hash.
-    const NAMED: Record<string, string[]> = { Z10: ['tests/security-route-scan-control.ts'] };
+    // ⚠ A SECOND NAMED FILE AT [[GTC-477]] (23 Nov 2026, the founder's ruling 2 on its plan: "The security
+    // suite grows from 257 to 262 checks. Yes to ... naming tests/security-validation.ts in contacts-untouched
+    // Z10, each with a dated note. No existing security check is changed or weakened."): suite 19 gains the
+    // host's create. tests/tweaks-guard-test.ts pins that file's whole text by hash too.
+    const NAMED: Record<string, string[]> = {
+      Z10: ['tests/security-route-scan-control.ts', 'tests/security-validation.ts'],
+    };
     const hit = changed.filter(
       (p) => !(NAMED[z.id] ?? []).includes(p) && watch.some((x) => p.startsWith(x))
     );

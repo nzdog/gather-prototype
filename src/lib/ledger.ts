@@ -38,8 +38,12 @@ export type ActorKind = 'HOST' | 'COHOST' | 'COORDINATOR' | 'GUEST' | 'SYSTEM';
  * to drop off, when."
  *
  * This set is defined by the spec, not by taste. Everything else on `Item`
- * (description, notes, critical, dietary tags, prep/serve times, displayOrder, dayId)
+ * (description, notes, critical, dietary tags, prep/serve times, displayOrder)
  * is host-side and never reaches a guest, so changing it touches nobody.
+ *
+ * [[GTC-477]] (the founder's Q13, 23 Nov 2026): `dayId` was on the host-side list
+ * until then. The guest page shows the dish's day, so the day is part of what was
+ * asked, and moving a dish to another day on an answered row is a change to the ask.
  */
 export const ASK_FIELDS = [
   'name',
@@ -51,6 +55,7 @@ export const ASK_FIELDS = [
   'dropOffAt',
   'dropOffLocation',
   'dropOffNote',
+  'dayId',
 ] as const;
 
 /**
