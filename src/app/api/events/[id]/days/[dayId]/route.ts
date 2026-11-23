@@ -8,6 +8,7 @@ import { ledgerActorForUser } from '@/lib/auth/actor';
 import { recordChange, type PendingChange } from '@/lib/ledger';
 import { isSessionsOn } from '@/lib/sessions/switch';
 import { SESSION_WORDS, readSessionDate, readSessionName } from '@/lib/sessions/input';
+import { sessionDateKey } from '@/lib/sessions/dates';
 
 type Ctx = { params: Promise<{ id: string; dayId: string }> };
 
@@ -62,7 +63,9 @@ export async function PATCH(request: NextRequest, context: Ctx) {
       data.name = name.name;
       changes.push({ ...base, field: 'name', before: session.name, after: name.name });
     }
-    if (date && date.date.getTime() !== session.date.getTime()) {
+    // [[GTC-479]] (decision 1, the date rule): the same NZ calendar day is not a change, whichever
+    // form the session's date is stored in; the stored date is then left as it is.
+    if (date && sessionDateKey(date.date) !== sessionDateKey(session.date)) {
       data.date = date.date;
       changes.push({
         ...base,
