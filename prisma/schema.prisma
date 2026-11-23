@@ -230,13 +230,34 @@ model Event {
   textBlocks                 TextBlock[]
 }
 
+/// A session of the event ([[GTC-476]] Q1: the screens say "session"; the model keeps its name).
 model Day {
-  id      String   @id @default(cuid())
-  name    String
-  date    DateTime
-  eventId String
-  event   Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  items   Item[]
+  id           String           @id @default(cuid())
+  name         String
+  date         DateTime
+  /// [[GTC-478]]: the session's place. Sessions are read by date, then this, then id, so two
+  /// sessions on one date keep a fixed order. Existing rows read 0, so they keep date-then-made order.
+  displayOrder Int              @default(0)
+  eventId      String
+  event        Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  items        Item[]
+  absences     SessionAbsence[]
+}
+
+/// [[GTC-478]] (ruling A): a person on the event who is NOT at this session. No rows means "at
+/// every session", so every existing event and every one-day event is unchanged. Deleted with its
+/// session, and with its person-on-event (a person leaving the event, a deleted person, a deleted
+/// event). Its writer must check that the session and the person are on the same event.
+model SessionAbsence {
+  id            String      @id @default(cuid())
+  personEventId String
+  dayId         String
+  createdAt     DateTime    @default(now())
+  personEvent   PersonEvent @relation(fields: [personEventId], references: [id], onDelete: Cascade)
+  day           Day         @relation(fields: [dayId], references: [id], onDelete: Cascade)
+
+  @@unique([personEventId, dayId])
+  @@index([dayId])
 }
 
 model Team {
@@ -534,6 +555,8 @@ model PersonEvent {
   /// that have picked THIS PersonEvent as their channel. Cross-household by design:
   /// these households need not be this row's own `household`.
   householdsAsContact Household[] @relation("HouseholdContactChannel")
+
+  sessionAbsences SessionAbsence[]
 
   @@unique([personId, eventId])
 }
