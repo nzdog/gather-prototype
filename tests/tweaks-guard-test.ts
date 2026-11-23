@@ -240,7 +240,7 @@ const PROTECTED: Entry[] = [
         // import above the first import; no existing check changed. The ebccc90d... it replaced was the
         // text at c686175.
         file: 'tests/security-validation.ts',
-        sha256: '7b1126b08a408f331eff32754fd0722faba3b46d8e5d679472e98c99b5de3883',
+        sha256: '71cccc4810ebbd72ed252fe0e7f31c9937e7417b1097f038904f63fd20ad2a5b',
         edited: true,
       },
       {

@@ -4207,14 +4207,16 @@ async function testSuite21_SessionRoutesStayInTheirEvent(fixtures: Fixtures) {
   const DAYS = '../src/app/api/events/[id]/days/route';
   const ONE = '../src/app/api/events/[id]/days/[dayId]/route';
   const SWITCH = 'GATHER_SESSIONS';
+  // The shared fixtures carry no dates, so this suite's sessions and its event take one of their own.
+  const ON = new Date('2026-12-25T00:00:00.000Z');
 
   await gtc478RemoveOwnRows();
   try {
     const dayA = await prisma.day.create({
-      data: { name: `${GTC478_TAG} session of A`, date: evA.startDate, eventId: evA.id },
+      data: { name: `${GTC478_TAG} session of A`, date: ON, eventId: evA.id },
     });
     const dayB = await prisma.day.create({
-      data: { name: `${GTC478_TAG} session of B`, date: evB.startDate, eventId: evB.id },
+      data: { name: `${GTC478_TAG} session of B`, date: ON, eventId: evB.id },
     });
     const other = await prisma.user.create({ data: { email: GTC478_EMAIL } });
     const otherPerson = await prisma.person.create({
@@ -4227,8 +4229,8 @@ async function testSuite21_SessionRoutesStayInTheirEvent(fixtures: Fixtures) {
     const evC = await prisma.event.create({
       data: {
         name: `${GTC478_TAG} event C`,
-        startDate: evA.startDate,
-        endDate: evA.startDate,
+        startDate: ON,
+        endDate: ON,
         status: 'DRAFT',
         hostId: otherPerson.id,
       },
@@ -4321,7 +4323,8 @@ async function testSuite21_SessionRoutesStayInTheirEvent(fixtures: Fixtures) {
       if (as === null) actAsNobody();
       else actAs(as);
       try {
-        return await callRoute(mod, method, `/api/events/${params.id}/days`, params, body);
+        // callRoute's type lists no PUT (no route before GTC-478 needed one); it calls mod[method] all the same.
+        return await callRoute(mod, method as any, `/api/events/${params.id}/days`, params, body);
       } catch (e) {
         return { status: -1, json: { threw: (e as Error).message } };
       } finally {
