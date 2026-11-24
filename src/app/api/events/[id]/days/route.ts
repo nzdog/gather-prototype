@@ -13,6 +13,7 @@ import {
   readSessionDate,
   readSessionName,
 } from '@/lib/sessions/input';
+import { sessionDateKey, sortSessions } from '@/lib/sessions/dates';
 
 /*
  * [[GTC-478]] (founder ruling D, 23 Nov 2026): while GATHER_SESSIONS is off, POST and PUT answer
@@ -40,15 +41,20 @@ export async function GET(_request: NextRequest, context: { params: Promise<{ id
   try {
     // [[GTC-478]] (E): date, then the session's place, then the order made. Every session made
     // before GTC-478 has place 0, so those read date then made, as the coordinator page does.
-    const days = await prisma.day.findMany({
+    // [[GTC-479]] (decision 1, the date rule): the date is the NZ calendar day of what is stored
+    // (src/lib/sessions/dates.ts), so a session stored at NZ midnight and one at midnight UTC on the
+    // same day sort by their place. The reply is unchanged: { id, name, date } only.
+    const rows = await prisma.day.findMany({
       where: { eventId },
       orderBy: SESSION_ORDER,
       select: {
         id: true,
         name: true,
         date: true,
+        displayOrder: true,
       },
     });
+    const days = sortSessions(rows).map(({ id, name, date }) => ({ id, name, date }));
 
     return NextResponse.json({ days });
   } catch (error) {
@@ -149,8 +155,12 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
     if (new Set(dayIds).size !== dayIds.length || dayIds.length !== sessions.length) {
       return NextResponse.json({ error: SESSION_WORDS.listEachOnce }, { status: 400 });
     }
+    // [[GTC-479]] (decision 1): date order is the NZ calendar day of what is stored, never the
+    // stored time, so two sessions on one day in the two stored forms may go in either order.
     for (let i = 1; i < dayIds.length; i++) {
-      if (byId.get(dayIds[i])!.date.getTime() < byId.get(dayIds[i - 1])!.date.getTime()) {
+      if (
+        sessionDateKey(byId.get(dayIds[i])!.date) < sessionDateKey(byId.get(dayIds[i - 1])!.date)
+      ) {
         return NextResponse.json({ error: SESSION_WORDS.dateOrder }, { status: 400 });
       }
     }
@@ -172,11 +182,14 @@ export async function PUT(request: NextRequest, context: { params: Promise<{ id:
         });
       }
       await recordChange(tx, { eventId, actor, changes });
-      return tx.day.findMany({
-        where: { eventId },
-        orderBy: SESSION_ORDER,
-        select: { id: true, name: true, date: true, displayOrder: true },
-      });
+      // [[GTC-479]] (decision 1): in their order by the date rule.
+      return sortSessions(
+        await tx.day.findMany({
+          where: { eventId },
+          orderBy: SESSION_ORDER,
+          select: { id: true, name: true, date: true, displayOrder: true },
+        })
+      );
     });
     return NextResponse.json({ days });
   } catch (error) {

@@ -132,6 +132,8 @@ export type ChangeAction =
   | 'CREATE_DAY'
   | 'EDIT_DAY'
   | 'DELETE_DAY'
+  // [[GTC-479]]: a person marked as at, or not at, one session. Versioned, never interrogated.
+  | 'EDIT_ATTENDANCE'
   | 'REGENERATE_PLAN'
   | 'GENERATE_PLAN'
   | 'SEND_PRESSED'
@@ -295,6 +297,12 @@ export function whyTrigger(change: PendingChange, event: LifecycleEvent): WhyTri
     case 'CREATE_DAY':
     case 'EDIT_DAY':
     case 'DELETE_DAY':
+    /*
+     * [[GTC-479]] (decision 5, founder ruling 1, 24 Nov 2026): who comes to which session is
+     * versioned and never asks why. Marking someone as not at a session where they hold a dish is
+     * warned about on the card first, and changes nothing about the dish (GTC-481 handles dishes).
+     */
+    case 'EDIT_ATTENDANCE':
     case 'REGENERATE_PLAN':
     case 'GENERATE_PLAN':
     case 'SEND_PRESSED':

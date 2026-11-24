@@ -456,6 +456,14 @@
     "securityIssues": []
   },
   {
+    "filePath": "src/app/api/events/[id]/sessions/route.ts",
+    "apiPath": "/api/events/:id/sessions",
+    "methods": ["GET", "PUT"],
+    "authType": "SESSION",
+    "authEvidence": ["requireEventRole"],
+    "securityIssues": []
+  },
+  {
     "filePath": "src/app/api/events/[id]/suggestions/[suggestionId]/accept/route.ts",
     "apiPath": "/api/events/:id/suggestions/:suggestionId/accept",
     "methods": ["POST"],

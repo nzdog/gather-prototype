@@ -1448,11 +1448,14 @@ async function runLive() {
   // ⚠ 113 → 114 AND 87 → 88 AT [[GTC-478]] (23 Nov 2026, the founder's ruling 2 on its plan: "route
   // files 114, handlers 149, classifications 88"): the session route, `days/[dayId]/route.ts`, and its one
   // classification entry. Nothing else in this check changed.
+  // ⚠ 114 → 115 AND 88 → 89 AT [[GTC-479]] (24 Nov 2026, the founder's ruling 2 on its plan: "the older
+  // pins you listed, each the narrowest move with a dated note"): the sessions route,
+  // `events/[id]/sessions/route.ts`, and its one classification entry. Nothing else in this check changed.
   assert(
     'S',
-    `Z1 CONTROL: no new route (114 route.ts, 88 classifications: the share route, GTC-472, and the session route, GTC-478, are the ones added); aiCallsUsed 0 on every event; every row removed by id (${whileExists} while it existed); totals as found (${before.invite}/${before.outbound} -> ${after.invite}/${after.outbound})`,
-    routes(join(process.cwd(), 'src/app/api')) === 114 &&
-      classified.length === 88 &&
+    `Z1 CONTROL: no new route (115 route.ts, 89 classifications: the share route, GTC-472, the session route, GTC-478, and the sessions route, GTC-479, are the ones added); aiCallsUsed 0 on every event; every row removed by id (${whileExists} while it existed); totals as found (${before.invite}/${before.outbound} -> ${after.invite}/${after.outbound})`,
+    routes(join(process.cwd(), 'src/app/api')) === 115 &&
+      classified.length === 89 &&
       ai.length === 9 &&
       ai.every((e) => e.aiCallsUsed === 0) &&
       whileExists.length > 0 &&

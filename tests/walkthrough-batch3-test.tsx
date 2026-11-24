@@ -464,10 +464,12 @@ async function runInMemory() {
   // the share route, `items/[itemId]/share/route.ts`.
   // ⚠ 113 → 114 AT [[GTC-478]] (23 Nov 2026, the founder's ruling 2 on its plan: "route files 114"): the
   // session route, `days/[dayId]/route.ts`.
+  // ⚠ 114 → 115 AT [[GTC-479]] (24 Nov 2026, the founder's ruling 2 on its plan: "the older pins you
+  // listed, each the narrowest move with a dated note"): the sessions route, `events/[id]/sessions/route.ts`.
   assert(
     '4',
-    '4k CONTROL: no new API route — src/app/api still has 114 route.ts (the share route, GTC-472, and the session route, GTC-478, are the ones added)',
-    routes(join(process.cwd(), 'src/app/api')) === 114
+    '4k CONTROL: no new API route — src/app/api still has 115 route.ts (the share route, GTC-472, the session route, GTC-478, and the sessions route, GTC-479, are the ones added)',
+    routes(join(process.cwd(), 'src/app/api')) === 115
   );
   assert(
     '4',

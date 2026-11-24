@@ -288,6 +288,9 @@ for (const action of [
   'CREATE_DAY',
   'EDIT_DAY',
   'DELETE_DAY',
+  // [[GTC-479]] (decision 5, founder ruling 1, 24 Nov 2026): who comes to which session is versioned
+  // and never asks why. One new check; nothing above changed.
+  'EDIT_ATTENDANCE',
   'GENERATE_PLAN',
   'REGENERATE_PLAN',
   'SEND_PRESSED',

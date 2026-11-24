@@ -5,6 +5,7 @@ import MomentArc, { type ArcDoor } from '@/components/plan/MomentArc';
 import { STRIP_WORDS } from '@/lib/moments/strip';
 import { SavedHousehold } from '@/components/plan/HouseholdCardList';
 import EventDetails, { type EventDetailsFacts } from '@/components/shared/EventDetails';
+import Moment1Sessions from '@/components/sessions/Moment1Sessions';
 
 interface Moment1SummaryProps {
   eventId: string;
@@ -302,6 +303,10 @@ export default function Moment1Summary({
             </div>
           </div>
         )}
+
+        {/* [[GTC-479]]: the sessions card and who comes to which session. Draws nothing while the
+            sessions switch is off. */}
+        <Moment1Sessions eventId={eventId} />
 
         {/* Add more people */}
         <div className="mt-8">
