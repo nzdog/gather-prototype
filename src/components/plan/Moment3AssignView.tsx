@@ -93,6 +93,8 @@ import Moment3ItemDetail, {
   answerWords,
   type Moment3ItemDetailChanges,
 } from './Moment3ItemDetail';
+import { SessionTabRow, useSessionTabs } from '@/components/sessions/SessionTabs';
+import { TAB_WORDS, WHOLE_EVENT } from '@/lib/sessions/tabs';
 
 /** [[GTC-472]] — a copy made by a share this session: its row, and the row it sits directly under. */
 interface SharedCopy {
@@ -121,6 +123,8 @@ export interface Moment3Item {
    * whose it is. The box says it after the send, and only while that person still holds the dish.
    */
   answer?: { personId: string; response: string } | null;
+  /** [[GTC-480]] A: the row's session (a Day), or null for the whole event. */
+  dayId?: string | null;
 }
 
 export interface Moment3Category {
@@ -341,6 +345,31 @@ export default function Moment3AssignView({
     [loadedCategories, savedDetails, copies, amountText]
   );
   const allItems = useMemo(() => categories.flatMap((c) => c.items), [categories]);
+  /*
+   * [[GTC-480]] A, decision 2 (the founder's ruling 2, 24 Nov 2026) — with the sessions switch on and
+   * sessions made, a tab for each session and "Whole event", and only the open tab's sections drawn.
+   * "Want me to suggest?", "X of Y items assigned.", the people's counts and "All sorted →" read the
+   * whole event, as before; Accept all takes the open tab's suggestions only (onScreen below). Off,
+   * or no sessions: every section, exactly as before.
+   */
+  const sessionTabs = useSessionTabs(categories);
+  const shownCategories = useMemo(
+    () => (sessionTabs.on ? sessionTabs.shown.filter((c) => c.items.length > 0) : categories),
+    [sessionTabs.on, sessionTabs.shown, categories]
+  );
+  const onOpenTab = useMemo(
+    () => new Set(shownCategories.flatMap((c) => c.items.map((i) => i.id))),
+    [shownCategories]
+  );
+  // Arriving from the board's search (GTC-380), the tab that holds that item opens, once.
+  const arrivalTabSet = useRef(false);
+  const { on: tabsOn, keyOf: tabKeyOf, setOpen: openTab } = sessionTabs;
+  useEffect(() => {
+    if (!tabsOn || !arriveAtItem || arrivalTabSet.current) return;
+    arrivalTabSet.current = true;
+    const row = allItems.find((i) => i.id === arriveAtItem);
+    if (row) openTab(tabKeyOf(row));
+  }, [tabsOn, arriveAtItem, allItems, openTab, tabKeyOf]);
   // [[GTC-385]] (item 59, Q11): the key shows only when a dish is marked; here without "tap a dish".
   const anyMarks = allItems.some((i) => (i.marks?.length ?? 0) > 0);
   const panelItems: PanelItemInput[] = useMemo(
@@ -450,7 +479,13 @@ export default function Moment3AssignView({
       if (saved) {
         const here = categories.find((c) => c.items.some((i) => i.id === itemId));
         const mine = here?.items.find((i) => i.id === itemId);
-        const twin = here?.items.some((i) => i.id !== itemId && i.name === mine?.name);
+        // [[GTC-480]] C: with sessions on, a twin is in the same session only (Q12).
+        const twin = here?.items.some(
+          (i) =>
+            i.id !== itemId &&
+            i.name === mine?.name &&
+            (!sessionTabs.on || (i.dayId ?? null) === (mine?.dayId ?? null))
+        );
         setShareNote(
           action === 'DELETE_ASSIGNMENT' && twin && mine ? shareUnassignedLine(mine.name) : null
         );
@@ -546,7 +581,10 @@ export default function Moment3AssignView({
 
   const selectedItemOpen = selection?.kind === 'item' && !holders[selection.id];
   const personSelected = selection?.kind === 'person';
-  const onScreen = suggestionsOnScreen(ghosts, holders).filter((g) => !(g.itemId in pending));
+  // [[GTC-480]] decision 2: with tabs, "on screen" is the open tab's (GTC-365: exactly those on screen).
+  const onScreen = suggestionsOnScreen(ghosts, holders).filter(
+    (g) => !(g.itemId in pending) && (!sessionTabs.on || onOpenTab.has(g.itemId))
+  );
   /** [[GTC-398]] item 5 — while a person is picked, the rows they hold, highlighted (assigning.ts). */
   const heldByThem = new Set(heldByPicked(selection, holders, pending));
 
@@ -661,6 +699,8 @@ export default function Moment3AssignView({
             critical: item.critical,
             placeholderAmount: item.placeholderAmount,
             answer: null,
+            // [[GTC-480]] C: the copy takes the session, as the server gives it, so it shows on this tab.
+            dayId: item.dayId ?? null,
           },
         },
       ]);
@@ -849,6 +889,8 @@ export default function Moment3AssignView({
               className="flex-1 min-w-0 mb-8 md:mb-0"
               onKeyDown={(e) => panelKeys(e, () => setSelection(null))}
             >
+              {/* [[GTC-480]] A: the session tabs, above the counter; nothing while there are none. */}
+              <SessionTabRow tabs={sessionTabs} className="-mx-6 px-6 md:mx-0 md:px-0 mb-3" />
               <p className="text-sm text-gray-600">{assignedCounterLine(panelItems)}</p>
               {/* [[GTC-472]] W8 — after a person is taken off a shared row. */}
               {shareNote && (
@@ -892,7 +934,15 @@ export default function Moment3AssignView({
                 />
               )}
               <div className="mt-4 space-y-6">
-                {categories.map((category) => (
+                {/* [[GTC-480]] A: the open tab with no rows says so. */}
+                {sessionTabs.on && shownCategories.length === 0 && (
+                  <p data-m3="session-empty" className="text-sm text-gray-500">
+                    {sessionTabs.open === WHOLE_EVENT
+                      ? TAB_WORDS.emptyWhole
+                      : TAB_WORDS.emptySession}
+                  </p>
+                )}
+                {shownCategories.map((category) => (
                   <section key={category.id}>
                     <h2 className="text-sm font-semibold text-gray-900 mb-2">
                       <span aria-hidden="true">{category.emoji}</span> {category.name}

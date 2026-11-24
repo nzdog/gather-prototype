@@ -17,6 +17,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useSessionsOn } from '@/components/sessions/SessionsSwitch';
 import { CARD_WORDS } from '@/lib/sessions/card-words';
 import { datesFrom, sessionDateWords } from '@/lib/sessions/dates';
+import { nameIsDate } from '@/lib/sessions/tabs';
 import ComingTo, { type ComingHousehold } from '@/components/sessions/ComingTo';
 
 export interface CardSession {
@@ -233,8 +234,14 @@ export function SessionsCard({ eventId, initial }: { eventId: string; initial?: 
                 <li key={s.id} className="py-3" data-session-id={s.id}>
                   <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
                     <div>
-                      <span className="text-gray-900 font-medium">{s.name}</span>{' '}
-                      <span className="text-sm text-gray-500">{sessionDateWords(s.date)}</span>
+                      <span className="text-gray-900 font-medium">{s.name}</span>
+                      {/* [[GTC-480]] H (GTC-479's note): the date once, when the name is only it. */}
+                      {!nameIsDate(s.name, s.date) && (
+                        <>
+                          {' '}
+                          <span className="text-sm text-gray-500">{sessionDateWords(s.date)}</span>
+                        </>
+                      )}
                       {outside(s.date) && (
                         <span className="ml-2 text-xs text-amber-700">
                           {CARD_WORDS.outsideDates}

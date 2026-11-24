@@ -116,6 +116,8 @@ type PlanApiItem = {
   quantityState?: string | null;
   placeholderAcknowledged?: boolean;
   team: { id: string; name: string; displayOrder?: number };
+  /** [[GTC-480]] B: the row's session (a Day), already sent by the items route; null: whole event. */
+  dayId?: string | null;
 };
 
 /**
@@ -175,6 +177,8 @@ function mapItemsToMoment3(items: Moment3ApiItem[]): {
             dropOffNote: item.dropOffNote ?? null,
             // [[GTC-406]]: the amber tag, the box's ruling-4 sentence, and the holder's answer.
             critical: item.critical === true,
+            // [[GTC-480]] A: the row's session, so Moment 3's tabs and its Details box see it.
+            dayId: item.dayId ?? null,
             placeholderAmount:
               item.quantityState === 'PLACEHOLDER' && item.placeholderAcknowledged !== true,
             answer:
@@ -229,6 +233,8 @@ function mapTeamsAndItemsToPlanCategories(
     dropOffLocation?: string | null;
     dropOffNote?: string | null;
     critical?: boolean;
+    /** [[GTC-480]] B: the row's session, or null for the whole event. */
+    dayId?: string | null;
   }>;
 }> {
   const itemsByTeamId = new Map<string, PlanApiItem[]>();
@@ -276,6 +282,8 @@ function mapTeamsAndItemsToPlanCategories(
           dropOffNote: item.dropOffNote ?? null,
           // [[GTC-406]] ruling 3: a critical row shows the amber tag.
           critical: item.critical === true,
+          // [[GTC-480]] B: the row's session, so the plan view's tabs and picker see it.
+          dayId: item.dayId ?? null,
         };
       }),
   }));
@@ -998,6 +1006,8 @@ function EventSetupFlow() {
     if (updates.dropOffNote !== undefined) body.dropOffNote = updates.dropOffNote;
     // [[GTC-406]] ruling 6: critical, only when Moment 3's box changed it.
     if (updates.critical !== undefined) body.critical = updates.critical;
+    // [[GTC-480]] B: the row's session (null: the whole event), an ask field, so the why sees it.
+    if (updates.dayId !== undefined) body.dayId = updates.dayId;
     // GTC-202: T4. PlanItem carries no assignment, so the response comes from
     // `items` — loaded on mount for every path that can reach this view, so the
     // lookup is reliable rather than best-effort.
@@ -1702,6 +1712,8 @@ function EventSetupFlow() {
                         ...(updates.dropOffNote !== undefined
                           ? { dropOffNote: updates.dropOffNote }
                           : {}),
+                        // [[GTC-480]] B: a row moved to another session moves tab.
+                        ...(updates.dayId !== undefined ? { dayId: updates.dayId } : {}),
                       }
                     : it
                 ),
@@ -1753,6 +1765,8 @@ function EventSetupFlow() {
                 description: newItem.notes,
                 // [[GTC-385]] (item 59, Q9): the ticks, on a food dish only.
                 ...(newItem.dietaryTags ? { dietaryTags: newItem.dietaryTags } : {}),
+                // [[GTC-480]] B: the new row's session, when it has one.
+                ...(newItem.dayId ? { dayId: newItem.dayId } : {}),
               }),
             });
             if (!res.ok) throw new Error('Failed to add item');
@@ -1776,6 +1790,8 @@ function EventSetupFlow() {
               notes: createdItem.notes ?? newItem.notes,
               kind: newItem.kind,
               dietaryFlags: newItem.dietaryTags,
+              // [[GTC-480]] B: on screen at once on its session's tab.
+              dayId: newItem.dayId ?? null,
             };
             setMoment2PlanCategories((prev) =>
               prev.map((cat) =>
