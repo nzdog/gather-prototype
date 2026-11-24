@@ -948,17 +948,67 @@ async function main() {
       added.filter((l) => l.startsWith('{/*') || l.endsWith('*/}')).length === 2,
     { added, removed }
   );
+  /*
+   * ⚠ [[GTC-480]] (24 Nov 2026, the founder's ruling 7 on its plan: "The older pins: moved as you
+   * described, the named hunks each required exactly once and the rest byte for byte, with the break
+   * proofs"). The setup page gained exactly these eight insertions, 16 lines, so Moments 2 and 3 see
+   * each row's session and the page's one item save sends it. Each is named here in full and must
+   * occur exactly once; with them taken out the page must still be the base's byte for byte. Any
+   * other edit, and any of the eight missing, repeated or changed, still turns U3 red.
+   */
+  const GTC480_SETUP_ADDED: string[] = [
+    [
+      "  /** [[GTC-480]] B: the row's session (a Day), already sent by the items route; null: whole event. */",
+      '  dayId?: string | null;',
+    ].join('\n') + '\n',
+    [
+      "            // [[GTC-480]] A: the row's session, so Moment 3's tabs and its Details box see it.",
+      '            dayId: item.dayId ?? null,',
+    ].join('\n') + '\n',
+    [
+      "    /** [[GTC-480]] B: the row's session, or null for the whole event. */",
+      '    dayId?: string | null;',
+    ].join('\n') + '\n',
+    [
+      "          // [[GTC-480]] B: the row's session, so the plan view's tabs and picker see it.",
+      '          dayId: item.dayId ?? null,',
+    ].join('\n') + '\n',
+    [
+      "    // [[GTC-480]] B: the row's session (null: the whole event), an ask field, so the why sees it.",
+      '    if (updates.dayId !== undefined) body.dayId = updates.dayId;',
+    ].join('\n') + '\n',
+    [
+      '                        // [[GTC-480]] B: a row moved to another session moves tab.',
+      '                        ...(updates.dayId !== undefined ? { dayId: updates.dayId } : {}),',
+    ].join('\n') + '\n',
+    [
+      "                // [[GTC-480]] B: the new row's session, when it has one.",
+      '                ...(newItem.dayId ? { dayId: newItem.dayId } : {}),',
+    ].join('\n') + '\n',
+    [
+      "              // [[GTC-480]] B: on screen at once on its session's tab.",
+      '              dayId: newItem.dayId ?? null,',
+    ].join('\n') + '\n',
+  ];
   let setupSame = false;
   try {
+    const now = read(F.setup);
+    const base = execFileSync('git', ['show', `${BASE}:${F.setup}`], {
+      cwd: ROOT,
+      encoding: 'utf8',
+    });
     setupSame =
-      execFileSync('git', ['diff', '--stat', BASE, '--', F.setup], {
-        cwd: ROOT,
-        encoding: 'utf8',
-      }).trim().length === 0;
+      base.length > 1000 &&
+      GTC480_SETUP_ADDED.every((hunk) => now.split(hunk).length === 2) &&
+      GTC480_SETUP_ADDED.reduce((out, hunk) => out.replace(hunk, ''), now) === base;
   } catch {
     setupSame = false;
   }
-  check('U3', 'the setup page itself is not edited (as the base, byte for byte)', setupSame);
+  check(
+    'U3',
+    'the setup page itself is not edited (as the base, byte for byte), but for GTC-480’s eight named insertions, each exactly once',
+    setupSame
+  );
   const Provider = SW?.SessionsSwitchProvider;
   const Card = CARD?.default;
   const offCard =
@@ -997,7 +1047,10 @@ async function main() {
   check(
     'U7',
     'the setup layout: connection() first, then the switch read on the server, handed to the page through the provider',
-    /await connection\(\);\s*return <SessionsSwitchProvider on=\{isSessionsOn\(\)\}>\{children\}<\/SessionsSwitchProvider>;/.test(
+    // ⚠ [[GTC-480]] (24 Nov 2026, the founder's ruling 7 on its plan): inside the switch, the one
+    // session plan (Moments 2 and 3's sessions and open tab), and nothing else. The switch is still
+    // read on the server, after connection(), and handed to the page through the provider.
+    /await connection\(\);\s*return \(\s*<SessionsSwitchProvider on=\{isSessionsOn\(\)\}>\s*<SessionPlanProvider>\{children\}<\/SessionPlanProvider>\s*<\/SessionsSwitchProvider>\s*\);/.test(
       layout
     ),
     layout.slice(-300)

@@ -160,6 +160,14 @@ const GTC479_SRC = [
   'src/components/sessions/Moment1Sessions.tsx',
   'src/components/sessions/ComingTo.tsx',
 ];
+/*
+ * ⚠ ONE NAMED FILE AT [[GTC-480]] (24 Nov 2026, the founder's ruling 7 on its plan: "The older pins:
+ * moved as you described"). The session plan for Moments 2 and 3 asks the sessions route through
+ * fetch, so it is named out of the new files' scans (N) by its exact path, as GTC-479's card is.
+ * GTC-480's other new src file, src/lib/sessions/tabs.ts, imports only the date helper and stays in
+ * the scans.
+ */
+const GTC480_SRC = ['src/components/sessions/SessionTabs.tsx'];
 const newSrc = added.filter(
   (p) =>
     p.startsWith('src/') &&
@@ -167,6 +175,7 @@ const newSrc = added.filter(
     !GTC472_SRC.includes(p) &&
     !GTC478_SRC.includes(p) &&
     !GTC479_SRC.includes(p) &&
+    !GTC480_SRC.includes(p) &&
     fs.existsSync(onDisk(p))
 );
 

@@ -543,10 +543,84 @@ function layerP(island: string, islandBase: string) {
     }
     return out;
   };
+  /*
+   * ⚠ [[GTC-480]] (24 Nov 2026, the founder's ruling 7 on its plan: "The older pins: moved as you
+   * described, the named hunks each required exactly once and the rest byte for byte, with the break
+   * proofs"). Moment 2's plan view gained exactly these eleven insertions, 33 lines, for Moments 2
+   * and 3 by session (the tabs, and the session picker on the add and edit boxes; nothing drawn
+   * while the sessions switch is off). Each is named here in full and must occur exactly once; with
+   * them taken out the file must still be byte for byte the file at 4851b3f. Any other edit, and any
+   * of the eleven missing, repeated or changed, still turns P1 red. Nothing else in this list moves.
+   */
+  const GTC480_MOMENT2_ADDED: string[] = [
+    [
+      'import {',
+      '  SessionPicker,',
+      '  SessionTabRow,',
+      '  useSessionChoice,',
+      '  useSessionTabs,',
+      "} from '@/components/sessions/SessionTabs';",
+    ].join('\n') + '\n',
+    [
+      "  /** [[GTC-480]] B: the row's session (a Day), or null for the whole event. */",
+      '  dayId?: string | null;',
+    ].join('\n') + '\n',
+    [
+      "  /** [[GTC-480]] B: the new row's session; absent or null for the whole event. */",
+      '  dayId?: string | null;',
+    ].join('\n') + '\n',
+    [
+      '  // [[GTC-480]] A: with the sessions switch on and sessions made, a tab for each session and',
+      '  // "Whole event"; the sections show the open tab\'s rows. The count line, the key and W8 above read',
+      '  // the whole plan. Off, or no sessions: `shown` is `categories` itself, as before.',
+      '  const sessionTabs = useSessionTabs(categories);',
+      '  categories = sessionTabs.shown;',
+      '  // A mark for delete clears when the tab changes, so no tap deletes a row out of sight.',
+      '  useEffect(() => {',
+      '    setSelectedItemIds((prev) => (prev.size === 0 ? prev : new Set()));',
+      '  }, [sessionTabs.open]);',
+    ].join('\n') + '\n',
+    [
+      '        {/* [[GTC-480]] A: the session tabs; nothing is drawn while there are none. */}',
+      '        <SessionTabRow tabs={sessionTabs} />',
+    ].join('\n') + '\n',
+    [
+      "  // [[GTC-480]] B: the row's session, sent only when it changed (null: the whole event).",
+      '  const session = useSessionChoice(item.dayId ?? null);',
+    ].join('\n') + '\n',
+    [
+      '        ...(session.on && session.value !== (item.dayId ?? null) ? { dayId: session.value } : {}),',
+    ].join('\n') + '\n',
+    [
+      '      {/* [[GTC-480]] B: which session this row is for. */}',
+      '      {session.on && <SessionPicker choice={session} />}',
+      '',
+    ].join('\n') + '\n',
+    [
+      "  // [[GTC-480]] B: the new row's session, starting on the open tab's (null: the whole event).",
+      '  const session = useSessionChoice();',
+    ].join('\n') + '\n',
+    ['        ...(session.on ? { dayId: session.value } : {}),'].join('\n') + '\n',
+    [
+      '      {/* [[GTC-480]] B: which session the new row is for. */}',
+      '      {session.on && <SessionPicker choice={session} />}',
+      '',
+    ].join('\n') + '\n',
+  ];
+  const withoutGtc480 = (text: string): string => {
+    if (GTC480_MOMENT2_ADDED.some((hunk) => text.split(hunk).length !== 2)) {
+      return 'a GTC-480 insertion is missing, repeated or changed';
+    }
+    return GTC480_MOMENT2_ADDED.reduce((out, hunk) => out.replace(hunk, ''), text);
+  };
   const changedSince = UNCHANGED.filter(
     (f) =>
       !CHECKS.same(
-        f === OLD_DASHBOARD ? withoutGtc475(read(f)) : read(f),
+        f === OLD_DASHBOARD
+          ? withoutGtc475(read(f))
+          : f === MOMENT2
+            ? withoutGtc480(read(f))
+            : read(f),
         atRef(f === BOARD ? CODE_H : BASE, f)
       ) ||
       (f === BOARD && !CHECKS.same(atRef(`${CODE_H}^`, f), atRef(BASE, f)))
