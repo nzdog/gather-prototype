@@ -391,10 +391,17 @@ async function main() {
       count(tabRow, 'shrink-0') === 4 &&
       count(tabRow, 'min-h-[44px]') === 4
   );
-  const optionsOf = (s: string) =>
-    [...s.matchAll(/<option value="([^"]*)"( selected="")?>([^<]*)<\/option>/g)].map(
+  // [[GTC-480]] fix, 24 Nov 2026 (the founder's standing word on my own new tests): only the Session
+  // list's options. The first version read every option in the box, so the add and edit boxes' unit
+  // list ("kg", "g", ... "pieces") came first and M10 and M12 failed on the new source.
+  const optionsOf = (s: string) => {
+    const at = s.indexOf('data-session-picker');
+    if (at < 0) return [];
+    const list = s.slice(at, s.indexOf('</select>', at));
+    return [...list.matchAll(/<option value="([^"]*)"( selected="")?>([^<]*)<\/option>/g)].map(
       (m) => `${m[1]}${m[2] ? '*' : ''}=${m[3]}`
     );
+  };
   const addEl = h(AddItemForm as any, { onAdd: async () => {}, onCancel: () => {} });
   const addPlain = within(addEl, { plain: true });
   const addOff = within(addEl, { on: false, sessions: SESSIONS, open: 's2' });
