@@ -2,6 +2,7 @@ import type { Prisma, PrismaClient } from '@prisma/client';
 import { recordChange, type LedgerActor, type PendingChange } from '@/lib/ledger';
 import { repairItemStatusAfterMutation } from '@/lib/workflow';
 import { mayHoldRow, SAME_TEAM_ERROR } from '@/lib/assignment/same-team';
+import { isSessionsOn } from '@/lib/sessions/switch';
 import {
   isDividable,
   roundAmount,
@@ -134,9 +135,13 @@ async function load(db: Reader, eventId: string, itemId: string): Promise<Loaded
     include: { assignment: { include: { person: { select: { id: true, name: true } } } } },
   });
   const byId = new Map(found.map((i) => [i.id, i]));
+  // [[GTC-480]] C (Q12, the founder's ruling 1, 24 Nov 2026): with the sessions switch on, a shared
+  // dish splits only within one session, so only its rows in the pressed row's session count (a
+  // row moved to another session leaves the split). Off: every row, as before.
+  const sameSession = (i: DishRow) => !isSessionsOn() || i.dayId === pressed.dayId;
   const rows = ids
     .map((id) => byId.get(id))
-    .filter((i): i is DishRow => !!i && i.assignment !== null);
+    .filter((i): i is DishRow => !!i && i.assignment !== null && sameSession(i));
 
   const sameUnit = rows.every(
     (r) =>

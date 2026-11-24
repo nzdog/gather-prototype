@@ -123,8 +123,10 @@ export default function ComingTo({
               className="border border-gray-200 rounded-lg bg-white"
               data-household-id={h.id}
             >
-              <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1 px-4 py-3">
-                <div>
+              {/* [[GTC-480]] H (GTC-479's note): the row does not wrap, so "Change" and "Done" stay
+                  beside a "Coming to" line that runs onto two lines; the words take the room. */}
+              <div className="flex items-start justify-between gap-x-3 px-4 py-3">
+                <div className="min-w-0">
                   <span className="text-gray-900 font-medium">{h.title}</span>
                   <p className="text-sm text-gray-500">{comingLine(h, sessions, notAt)}</p>
                 </div>
@@ -135,7 +137,7 @@ export default function ComingTo({
                     setError(null);
                     setOpen(isOpen ? null : h.id);
                   }}
-                  className="text-sm text-accent hover:text-accent-dark font-medium transition-colors"
+                  className="shrink-0 text-sm text-accent hover:text-accent-dark font-medium transition-colors"
                 >
                   {isOpen ? COMING_WORDS.done : COMING_WORDS.change}
                 </button>

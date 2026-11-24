@@ -3,6 +3,8 @@ import { resolveToken } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { computeTeamStatusFromItems } from '@/lib/workflow';
 import { logInviteEvent } from '@/lib/invite-events';
+import { isSessionsOn } from '@/lib/sessions/switch';
+import { sortSessions } from '@/lib/sessions/dates';
 
 /**
  * GET /api/c/[token]
@@ -149,11 +151,19 @@ export async function GET(request: NextRequest, context: { params: Promise<{ tok
   // 8. [[GTC-477]] — every Day of the link's event, for the Add item box's Day list. Read only
   // from the event this link opens. Date order; two days on one date in the order they were made
   // (a cuid sorts by when it was made). [[GTC-478]] brings the real order column.
-  const days = await prisma.day.findMany({
+  const dayRows = await prisma.day.findMany({
     where: { eventId: resolvedContext.event.id },
     orderBy: [{ date: 'asc' }, { id: 'asc' }],
-    select: { id: true, name: true, date: true },
+    select: { id: true, name: true, date: true, displayOrder: true },
   });
+  // [[GTC-480]] H (GTC-479's note): with the sessions switch on, the sessions' own order, read by the
+  // date rule (src/lib/sessions/dates.ts) and then their place; off, the order above, as before. The
+  // reply's shape is unchanged either way.
+  const days = (isSessionsOn() ? sortSessions(dayRows) : dayRows).map(({ id, name, date }) => ({
+    id,
+    name,
+    date,
+  }));
 
   return NextResponse.json({
     isDemo: resolvedContext.event.isDemo,

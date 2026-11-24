@@ -27,12 +27,14 @@ import { M3_DETAIL_WORDS, M3_SHARE_WORDS } from '@/lib/moment3/words';
 import type { ShareAmountLine, SharePreview } from '@/lib/moment3/share-split';
 import { ANSWER_WORDS } from '@/lib/print/plan-lists';
 import Moment3ShareDish, { type ShareablePerson } from './Moment3ShareDish';
+import { SessionPicker, useSessionChoice } from '@/components/sessions/SessionTabs';
 
 /** What the box changes, each only when it changed. */
 export interface Moment3ItemDetailChanges {
   critical?: boolean;
   dropOffLocation?: string | null;
   dropOffNote?: string | null;
+  dayId?: string | null;
 }
 
 /** What the box shows of a row (a Moment 3 item, as the setup page builds it). */
@@ -47,6 +49,8 @@ export interface Moment3ItemDetailFacts {
   placeholderAmount?: boolean;
   dropOffLocation?: string | null;
   dropOffNote?: string | null;
+  /** [[GTC-480]] B: its session (a Day), or null for the whole event. */
+  dayId?: string | null;
 }
 
 /**
@@ -114,6 +118,8 @@ export default function Moment3ItemDetail({
   const [dropOffPlace, setDropOffPlace] = useState(item.dropOffLocation ?? '');
   const [dropOffTime, setDropOffTime] = useState(item.dropOffNote ?? '');
   const [saving, setSaving] = useState(false);
+  // [[GTC-480]] B: its session, saved only when it changed (null: the whole event); off, never.
+  const session = useSessionChoice(item.dayId ?? null);
   /** [[GTC-472]] — the share's picker and split are showing in this same sheet. */
   const [sharing, setSharing] = useState(false);
   const savingRef = useRef(false);
@@ -146,6 +152,7 @@ export default function Moment3ItemDetail({
       ? { dropOffLocation: place }
       : {}),
     ...(!isJob && time !== (item.dropOffNote?.trim() || null) ? { dropOffNote: time } : {}),
+    ...(session.on && session.value !== (item.dayId ?? null) ? { dayId: session.value } : {}),
   };
   const changed = Object.keys(changes).length > 0;
   // Ruling 4: said only for a critical dish (as ticked here) whose amount is still a placeholder.
@@ -230,6 +237,13 @@ export default function Moment3ItemDetail({
               <p data-m3-detail-needs-amount className="mt-2 text-sm text-amber-700">
                 {M3_DETAIL_WORDS.NEEDS_AMOUNT}
               </p>
+            )}
+
+            {/* [[GTC-480]] B: which session this is for, a dish or a job. */}
+            {session.on && (
+              <div className="mt-4">
+                <SessionPicker choice={session} />
+              </div>
             )}
 
             {!isJob && (

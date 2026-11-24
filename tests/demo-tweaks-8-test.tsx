@@ -396,10 +396,14 @@ export const CHECKS = {
       'const changes: Moment3ItemDetailChanges = {'.length
     );
     return (
+      // ⚠ [[GTC-480]] (24 Nov 2026, the founder's ruling 7 on its plan: "The older pins: moved as you
+      // described"): one more field, by name, the row's session (its picker in the box, saved only
+      // when it changed; nothing drawn while the sessions switch is off). The other three as they were.
       sameList(fields, [
         'critical?: boolean;',
         'dropOffLocation?: string | null;',
         'dropOffNote?: string | null;',
+        'dayId?: string | null;',
       ]) &&
       /const place = dropOffPlace\.trim\(\) \|\| null;/.test(boxCode) &&
       /const time = dropOffTime\.trim\(\) \|\| null;/.test(boxCode) &&

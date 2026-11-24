@@ -25,6 +25,12 @@ import {
 } from '@/lib/items/dish-marks';
 import { DishMarkTags, DishMarksKey } from './DishMarks';
 import { CriticalTag } from './Moment3ItemDetail';
+import {
+  SessionPicker,
+  SessionTabRow,
+  useSessionChoice,
+  useSessionTabs,
+} from '@/components/sessions/SessionTabs';
 
 // ─── Public types ────────────────────────────────────────────────────────────
 
@@ -44,6 +50,8 @@ export interface PlanItem {
   dropOffNote?: string | null;
   /** [[GTC-406]] ruling 3: a critical row shows the amber "critical" tag (set on Moment 3). */
   critical?: boolean;
+  /** [[GTC-480]] B: the row's session (a Day), or null for the whole event. */
+  dayId?: string | null;
 }
 
 export interface PlanCategory {
@@ -63,6 +71,8 @@ export interface NewPlanItem {
   notes?: string;
   /** [[GTC-385]] (item 59, Q9): the ticks from "+ Add item", as the AI writes them. */
   dietaryTags?: string[];
+  /** [[GTC-480]] B: the new row's session; absent or null for the whole event. */
+  dayId?: string | null;
 }
 
 interface Moment2PlanViewProps {
@@ -190,6 +200,15 @@ export default function Moment2PlanView({
   );
   // [[GTC-382]] W8 — her own plan with nothing in it yet.
   const firstTime = ownPlan && totalItems === 0;
+  // [[GTC-480]] A: with the sessions switch on and sessions made, a tab for each session and
+  // "Whole event"; the sections show the open tab's rows. The count line, the key and W8 above read
+  // the whole plan. Off, or no sessions: `shown` is `categories` itself, as before.
+  const sessionTabs = useSessionTabs(categories);
+  categories = sessionTabs.shown;
+  // A mark for delete clears when the tab changes, so no tap deletes a row out of sight.
+  useEffect(() => {
+    setSelectedItemIds((prev) => (prev.size === 0 ? prev : new Set()));
+  }, [sessionTabs.open]);
 
   // Ruling Q2 (GTC-236): regenerate clears marks — they are staging state, and after a
   // regenerate the marked GENERATED rows no longer exist anyway.
@@ -330,6 +349,8 @@ export default function Moment2PlanView({
               : 'Not quite right? Regenerate the plan'}
           </button>
         )}
+        {/* [[GTC-480]] A: the session tabs; nothing is drawn while there are none. */}
+        <SessionTabRow tabs={sessionTabs} />
 
         {anyMarks && (
           <DishMarksKey
@@ -846,6 +867,8 @@ export function ItemEditForm({
   const [dropOffPlace, setDropOffPlace] = useState(item.dropOffLocation ?? '');
   const [dropOffTime, setDropOffTime] = useState(item.dropOffNote ?? '');
   const [saving, setSaving] = useState(false);
+  // [[GTC-480]] B: the row's session, sent only when it changed (null: the whole event).
+  const session = useSessionChoice(item.dayId ?? null);
   const nameRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -877,6 +900,7 @@ export function ItemEditForm({
         ...(showDropOff && time !== (item.dropOffNote?.trim() || null)
           ? { dropOffNote: time }
           : {}),
+        ...(session.on && session.value !== (item.dayId ?? null) ? { dayId: session.value } : {}),
       });
     } finally {
       setSaving(false);
@@ -964,6 +988,9 @@ export function ItemEditForm({
         </>
       )}
 
+      {/* [[GTC-480]] B: which session this row is for. */}
+      {session.on && <SessionPicker choice={session} />}
+
       <div className="flex items-center justify-between pt-1">
         <div className="flex items-center gap-2">
           <button
@@ -1013,6 +1040,8 @@ export function AddItemForm({ marksAllowed = false, onAdd, onCancel }: AddItemFo
   const [unit, setUnit] = useState('pieces');
   const [serves, setServes] = useState('');
   const [saving, setSaving] = useState(false);
+  // [[GTC-480]] B: the new row's session, starting on the open tab's (null: the whole event).
+  const session = useSessionChoice();
   const nameRef = useRef<HTMLInputElement>(null);
 
   // Refocus on a toggle: the name field is a different input for a dish and a job.
@@ -1033,6 +1062,7 @@ export function AddItemForm({ marksAllowed = false, onAdd, onCancel }: AddItemFo
         quantity: parsedQuantity,
         unit: kind === 'TASK' ? '' : unit.trim() || 'pieces',
         servingSize: kind === 'TASK' ? '' : serves.trim(),
+        ...(session.on ? { dayId: session.value } : {}),
         ...(marksAllowed && kind === 'ITEM' && marks.length > 0
           ? { dietaryTags: withMarks([], marks) }
           : {}),
@@ -1112,6 +1142,9 @@ export function AddItemForm({ marksAllowed = false, onAdd, onCancel }: AddItemFo
           {marksAllowed && <DishTicks marks={marks} onChange={setMarks} />}
         </>
       )}
+
+      {/* [[GTC-480]] B: which session the new row is for. */}
+      {session.on && <SessionPicker choice={session} />}
 
       <div className="flex items-center gap-2 pt-1">
         <button
