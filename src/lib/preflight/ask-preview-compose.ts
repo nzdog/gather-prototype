@@ -83,14 +83,23 @@ export interface ComposedPreview {
 }
 
 type WireDate<T> = Omit<T, 'event'> & {
-  event: Omit<AskPreview['event'], 'startDate'> & { startDate: Date | string };
+  event: Omit<AskPreview['event'], 'startDate' | 'endDate'> & {
+    startDate: Date | string;
+    endDate?: Date | string;
+  };
 };
 
 export function composePreview(
   preview: AskPreview | WireDate<AskPreview>,
   authorLine: string | null
 ): ComposedPreview {
-  const event = { ...preview.event, startDate: new Date(preview.event.startDate) };
+  // [[GTC-485]] G: the last day, when the preview carries one, back from its wire form.
+  const { endDate, ...facts } = preview.event;
+  const event = {
+    ...facts,
+    startDate: new Date(preview.event.startDate),
+    ...(endDate ? { endDate: new Date(endDate) } : {}),
+  };
 
   const rows = preview.recipients.map((recipient): PreviewRow => {
     if (recipient.hostAsCarrier) {

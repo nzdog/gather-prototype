@@ -115,6 +115,7 @@ export async function findDecideByFollowupCandidates(
           name: true,
           dropOffAt: true,
           decideByOffsetHours: true,
+          day: { select: { date: true } },
           team: {
             select: {
               event: {

@@ -9,6 +9,9 @@ import { resolveCarriedSubjects } from '@/lib/eligibility/carried-answer';
 import { firstNameOf } from '@/lib/messages/ask-register';
 import { isSampleCopy } from '@/lib/demo/sample-board';
 import { guestAmountText } from '@/lib/guest/guest-amount';
+import { isSessionsOn } from '@/lib/sessions/switch';
+import { sessionDateKey } from '@/lib/sessions/dates';
+import { sessionWithDate } from '@/lib/sessions/tabs';
 
 /**
  * GET /api/p/[token]
@@ -90,7 +93,9 @@ export async function GET(request: NextRequest, context: { params: Promise<{ tok
             // [[GTC-472]] D5: the amount from the number and its unit word, as the guest reads it.
             quantity: guestAmountText(a.item),
             critical: a.item.critical,
-            day: a.item.day ? { id: a.item.day.id, name: a.item.day.name } : null,
+            day: a.item.day
+              ? { id: a.item.day.id, name: a.item.day.name, ...sessionLabel(a.item.day) }
+              : null,
           },
         })),
       });
@@ -275,6 +280,18 @@ export async function GET(request: NextRequest, context: { params: Promise<{ tok
   });
 }
 
+/**
+ * [[GTC-485]] E (the founder's rulings 4 and 5 at GTC-480): a dish's session as the guest page shows
+ * it. While the sessions switch is on, its name and date ("Christmas lunch, Fri 25 Dec", or the date
+ * alone when the name is only the date), read by GTC-479's date rule. Off, nothing: the wire is as
+ * before and the page shows the name alone.
+ */
+function sessionLabel(day: { name: string; date: Date }): { label?: string } {
+  return isSessionsOn()
+    ? { label: sessionWithDate({ name: day.name, date: sessionDateKey(day.date) }) }
+    : {};
+}
+
 /** One row on the wire. Shared by the recipient's own rows and by a carried child's. */
 function wireAssignment(a: {
   id: string;
@@ -318,7 +335,14 @@ function wireAssignment(a: {
       dropOffAt: a.item.dropOffAt,
       dropOffLocation: a.item.dropOffLocation,
       dropOffNote: a.item.dropOffNote,
-      day: a.item.day ? { id: a.item.day.id, name: a.item.day.name, date: a.item.day.date } : null,
+      day: a.item.day
+        ? {
+            id: a.item.day.id,
+            name: a.item.day.name,
+            date: a.item.day.date,
+            ...sessionLabel(a.item.day),
+          }
+        : null,
     },
   };
 }

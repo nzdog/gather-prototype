@@ -346,7 +346,16 @@ export async function retryUndeliveredFollowups(
         decideByFollowupSentAt: { not: null },
         item: { team: { eventId: row.eventId } },
       },
-      select: { item: { select: { name: true, dropOffAt: true, decideByOffsetHours: true } } },
+      select: {
+        item: {
+          select: {
+            name: true,
+            dropOffAt: true,
+            decideByOffsetHours: true,
+            day: { select: { date: true } },
+          },
+        },
+      },
     });
     const withhold = async (why: OutboundWithheldWhy) => {
       if (await claimTextRetry(prisma, target, why)) out.withheld++;

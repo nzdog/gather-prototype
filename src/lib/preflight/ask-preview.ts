@@ -78,6 +78,8 @@ import { isHostMembership } from '@/lib/eligibility/host-exclusion';
 import { HOST_NAME_FALLBACK, firstNameOf } from '@/lib/messages/ask-register';
 import { buildTokenUrl } from '@/lib/tokens';
 import { SMS_OPT_OUT_IN_FORCE } from '@/lib/sms/opt-out-service';
+import { isSessionsOn } from '@/lib/sessions/switch';
+import { sessionDateKey } from '@/lib/sessions/dates';
 
 type Db = Prisma.TransactionClient;
 
@@ -424,6 +426,12 @@ export interface AskPreview {
      * preview built by hand without it is a planned event's, as before.
      */
     invitesOnly?: boolean;
+    /**
+     * [[GTC-485]] G: the event's last day, only while the sessions switch is on and the event's
+     * first and last days are different NZ dates, so the draft first line names both. Absent
+     * otherwise: the facts are exactly as before.
+     */
+    endDate?: Date;
   };
   hostName: string;
   /** False on events that predate [[GTC-256]] phase 2 and keep no host membership row. */
@@ -464,6 +472,8 @@ export async function readAskPreview(
     select: {
       name: true,
       startDate: true,
+      // [[GTC-485]] G: read for the draft first line's last day; given on only as below.
+      endDate: true,
       venueName: true,
       occasionDescription: true,
       hostId: true,
@@ -806,6 +816,9 @@ export async function readAskPreview(
       venueName: event.venueName,
       occasionDescription: event.occasionDescription,
       invitesOnly: event.setup?.invitesOnly === true,
+      ...(isSessionsOn() && sessionDateKey(event.endDate) !== sessionDateKey(event.startDate)
+        ? { endDate: event.endDate }
+        : {}),
     },
     hostName: event.host?.name?.trim() || HOST_NAME_FALLBACK,
     hostIdentityResolved: memberships.some(isHost),

@@ -349,6 +349,11 @@ export interface GlanceItemInput {
   quantityUnit: string | null;
   quantityUnitCustom: string | null;
   item: DecideByItem;
+  /**
+   * [[GTC-485]] F: the dish's session tag (its session's name), set only while the sessions
+   * switch is on; absent for a whole-event dish. Never a colour input.
+   */
+  session?: string;
 }
 
 /** The facts about a person that bear on their colour, beyond the rows they hold. */
@@ -412,6 +417,8 @@ export interface GlanceItem {
    * instant its meaning, and on any other row it would be a deadline nobody is under.
    */
   decideByAt: string | null;
+  /** [[GTC-485]] F: the dish's session tag, as on `GlanceItemInput`; absent for a whole event. */
+  session?: string;
 }
 
 export interface GlancePerson {

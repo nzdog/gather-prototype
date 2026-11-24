@@ -78,6 +78,11 @@ export interface DecideByOffsetSource {
 /** The item half of the derivation: `neededBy`'s input plus the layer-1 override. */
 export interface DecideByItem extends DecideByOffsetSource {
   dropOffAt: Date | null;
+  /**
+   * [[GTC-485]] D: the dish's session, where it is loaded. `neededBy` reads it only while the
+   * sessions switch is on.
+   */
+  day?: { date: Date } | null;
 }
 
 /** The event half: the lifecycle facts plus the layer-2 default. */

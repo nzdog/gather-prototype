@@ -44,6 +44,7 @@ import { moment4Doors } from '@/lib/moments/strip-hrefs';
 import { readSampleBoardView } from '@/lib/demo/sample-board';
 import SampleViewToggle from '@/components/demo/SampleViewToggle';
 import GuestRepliesButton from '@/components/demo/GuestRepliesButton';
+import { isSessionsOn } from '@/lib/sessions/switch';
 
 /*
   ⚠ RULING 36 (2026-09-11) — THE `?variant=` SWITCH IS DELETED, AND `searchParams` WITH IT.
@@ -156,6 +157,15 @@ export default async function GlancePage({ params }: { params: Promise<{ eventId
   // other event. The guest's link is read by the helper, not here.
   const sample = await readSampleBoardView(prisma, eventId, now);
 
+  // [[GTC-485]] D: while the sessions switch is on, "Answers by" counts each of the plan's rows
+  // from its own session (a whole-event row from the event's last day). Off: nothing is read here.
+  const sessionRows = isSessionsOn()
+    ? await prisma.item.findMany({
+        where: { team: { eventId } },
+        select: { day: { select: { date: true } } },
+      })
+    : undefined;
+
   return (
     <div className="min-h-screen bg-[#efede6]">
       {/*
@@ -222,7 +232,7 @@ export default async function GlancePage({ params }: { params: Promise<{ eventId
           [[GTC-366]] (item 8) — when answers are due, after the press only and until that NZ day
           has passed (Q5 to Q7); and what "Days to go" shows, until the start day has passed (Q8).
         */
-        answersBy={answersByDay(event, now)}
+        answersBy={answersByDay(event, now, sessionRows)}
         daysToGo={daysToGoLine(event.startDate, now)}
         /* [[GTC-366]] (item 11) — the event's date as the print for the fridge shows it. */
         printDate={printEventDate(event.startDate)}

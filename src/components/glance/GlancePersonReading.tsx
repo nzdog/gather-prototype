@@ -291,6 +291,15 @@ export default function GlancePersonReading({
                   {row.critical ? (
                     <span className="text-[11px] text-[#888780]">critical</span>
                   ) : null}
+                  {/* [[GTC-485]] F: the session, small and grey; none for a whole-event dish. */}
+                  {row.session ? (
+                    <span
+                      data-reading-session=""
+                      className="rounded bg-white px-1.5 text-[11px] text-[#888780]"
+                    >
+                      {row.session}
+                    </span>
+                  ) : null}
                   {/*
                     The quantity, right-aligned so a column of rows reads as a list of amounts.
                     ABSENT rather than "—" when there is none: a placeholder quantity and no

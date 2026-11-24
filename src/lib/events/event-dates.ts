@@ -53,12 +53,25 @@ export function shortNzDay(d: Date): string {
  * fall on another day; this is the event's.
  *
  * Q6: null before the press (the clock starts there), and null once that NZ day has passed.
+ *
+ * [[GTC-485]] D (the founder's ruling 5 at GTC-480): given the plan's rows (the board page gives
+ * them only while the sessions switch is on), each counts back from its own session, a whole-event
+ * row from the event's last day, with the event's offset; the line is the next of those days still
+ * to come. Not given: the event's day, as before.
  */
 export function answersByDay(
   event: LifecycleEvent & { decideByOffsetHours: number | null },
-  now: Date
+  now: Date,
+  rows?: readonly { day: { date: Date } | null }[]
 ): string | null {
   if (!isSent(event)) return null;
+  if (rows && rows.length > 0) {
+    const next = rows
+      .map((row) => decideBy({ dropOffAt: null, decideByOffsetHours: null, day: row.day }, event))
+      .filter((at) => nzDaysBetween(now, at) >= 0)
+      .sort((a, b) => a.getTime() - b.getTime())[0];
+    return next ? shortNzDay(next) : null;
+  }
   const at = decideBy({ dropOffAt: null, decideByOffsetHours: null }, event);
   if (nzDaysBetween(now, at) < 0) return null;
   return shortNzDay(at);
