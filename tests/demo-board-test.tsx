@@ -225,6 +225,58 @@ const GUEST_PAIRS: Pairs = [
       '          )}\n',
   ],
 ];
+/**
+ * ⚠ [[GTC-485]] (25 Nov 2026, the founder's final word on its plan, item 4: "The hunks, the moved
+ * pins and the new suite as planned"). The guest page gains exactly these four pieces for E, a
+ * dish's session with its date (the guest route sends `label` only while the sessions switch is
+ * on). Each is named here in full and must be found exactly once; the base with its older pieces
+ * and these must equal the file byte for byte. Any other edit, and any of them missing, repeated or
+ * changed, still turns G1 red. Nothing else in this file moves.
+ */
+const GTC485_GUEST_PAIRS: Pairs = [
+  [
+    '      day: { id: string; name: string } | null;\n',
+    "      // [[GTC-485]] E: the session's name and date, sent only while the sessions switch is on.\n" +
+      '      day: { id: string; name: string; label?: string } | null;\n',
+  ],
+  [
+    '      name: string;\n' + '      date: string;\n' + '    } | null;\n',
+    '      name: string;\n' +
+      '      date: string;\n' +
+      "      // [[GTC-485]] E: the session's name and date, sent only while the sessions switch is on.\n" +
+      '      label?: string;\n' +
+      '    } | null;\n',
+  ],
+  [
+    '                        <span className="text-gray-400 text-xs">({a.item.day.name})</span>\n',
+    '                        <span className="text-gray-400 text-xs">\n' +
+      '                          ({a.item.day.label ?? a.item.day.name})\n' +
+      '                        </span>\n',
+  ],
+  [
+    '                  <span className="text-gray-900">{assignment.item.day.name}</span>\n',
+    '                  <span className="text-gray-900">\n' +
+      '                    {assignment.item.day.label ?? assignment.item.day.name}\n' +
+      '                  </span>\n',
+  ],
+];
+/**
+ * ⚠ [[GTC-485]] (25 Nov 2026, the founder's final word on its plan, item 4: "The hunks, the moved
+ * pins and the new suite as planned"). The pre-flight gains exactly this one insertion for G, the
+ * event's last day in the draft first line's facts (sent only while the sessions switch is on).
+ * Each is named here in full and must be found exactly once; the base with its older pieces and
+ * these must equal the file byte for byte. Any other edit, and any of them missing, repeated or
+ * changed, still turns L2 red. Nothing else in this file moves.
+ */
+const GTC485_PRE_PAIRS: Pairs = [
+  [
+    '            startDate: new Date(data.event.startDate),\n',
+    '            startDate: new Date(data.event.startDate),\n' +
+      '            // [[GTC-485]] G: the last day, only while the sessions switch is on and the event spans\n' +
+      '            // more than one date (a string on the wire, as the first day is).\n' +
+      '            ...(data.event.endDate ? { endDate: new Date(data.event.endDate) } : {}),\n',
+  ],
+];
 
 /** Every `<a>` in some markup: its href and its words. */
 const anchors = (html: string) =>
@@ -299,7 +351,7 @@ export const CHECKS = {
   },
   /** L2 — the pre-flight is 5f64ce6's with exactly the import and the line after the panel, on `pretend`, plus GTC-449's six S2.5 pieces (and nothing else). */
   preflightLine(now: string, base: string) {
-    const exact = base.length > 1000 ? applyPairs(base, PRE_PAIRS) : null;
+    const exact = base.length > 1000 ? applyPairs(base, [...PRE_PAIRS, ...GTC485_PRE_PAIRS]) : null;
     return (
       exact !== null &&
       now === exact &&
@@ -423,7 +475,8 @@ export const CHECKS = {
   },
   /** G1 — the guest page is 5f64ce6's with exactly GTC-444's pieces, byte for byte. */
   guestPage(now: string, base: string) {
-    const exact = base.length > 1000 ? applyPairs(base, GUEST_PAIRS) : null;
+    const exact =
+      base.length > 1000 ? applyPairs(base, [...GUEST_PAIRS, ...GTC485_GUEST_PAIRS]) : null;
     return exact !== null && now === exact;
   },
   /** A4 — the copy's board: W43, Host view to itself, Guest view to Aroha's page, W46 naming her. */

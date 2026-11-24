@@ -532,11 +532,22 @@ async function main() {
   );
   const life = read('src/lib/lifecycle.ts');
   const lifeCode = code('src/lib/lifecycle.ts');
+  // ⚠ [[GTC-485]] (25 Nov 2026, the founder's final word on its plan, items 1 and 4): neededBy()
+  // reads a dish's session through the date helper while the sessions switch is on, so
+  // lifecycle.ts gains those two imports. Both files import nothing (GTC-478, GTC-479), so it is
+  // still safe in the browser. Any other import still turns S1 red.
   assert(
     'S',
-    "S1 KEPT: lifecycle.ts's only import is the type from @prisma/client (safe in the browser)",
+    'S1 KEPT: lifecycle.ts imports only the type from @prisma/client and the two sessions files, which import nothing (safe in the browser)',
     (life.match(/^import .*$/gm) ?? []).join('\n') ===
-      "import type { EventStatus } from '@prisma/client';"
+      [
+        "import type { EventStatus } from '@prisma/client';",
+        "import { sessionDateKey } from './sessions/dates';",
+        "import { isSessionsOn } from './sessions/switch';",
+      ].join('\n') &&
+      ['src/lib/sessions/dates.ts', 'src/lib/sessions/switch.ts'].every(
+        (f) => !/^import /m.test(read(f))
+      )
   );
   assert(
     'S',

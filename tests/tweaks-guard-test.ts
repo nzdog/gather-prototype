@@ -430,6 +430,23 @@ const PROTECTED: Entry[] = [
     kind: 'path',
     path: 'src/lib/sms/decide-by-eligibility.ts',
     why: 'who is due the decide-by follow-up: reads the SMS and email opt-outs',
+    // ⚠ [[GTC-485]] (25 Nov 2026, the founder's final word on its plan, item 1: "the one-line select
+    // addition to src/lib/sms/decide-by-eligibility.ts ... exactly as shown, nothing else in either
+    // file"): the finder loads the dish's session date for its decide-by clock. 21a9577 plus that
+    // one line, after the item select's dropOffAt and decideByOffsetHours lines. Any other edit
+    // still turns this red.
+    ruled: 'GTC-485: the item select loads the session date (one line)',
+    plus: [
+      {
+        file: 'src/lib/sms/decide-by-eligibility.ts',
+        insert: [
+          {
+            after: ['          dropOffAt: true,', '          decideByOffsetHours: true,'],
+            lines: ['          day: { select: { date: true } },'],
+          },
+        ],
+      },
+    ],
   },
   {
     zone: 7,
@@ -475,6 +492,20 @@ const PROTECTED: Entry[] = [
     kind: 'path',
     path: 'src/lib/sms/decide-by-sender.ts',
     why: 'sends the decide-by follow-up: reads the email opt-out and the email block',
+    // ⚠ BY ITS HASH SINCE [[GTC-485]] (25 Nov 2026, the founder's final word on its plan, item 1:
+    // "the one select to src/lib/sms/decide-by-sender.ts, exactly as shown, nothing else in either
+    // file"): the email retry's maybes select loads the session date. Prettier breaks that one line
+    // into nine, so the change is not insertions only. The file is pinned whole, by the SHA-256 of
+    // its text at GTC-485's source commit: 21a9577's file with that one select replaced, and
+    // nothing else. Any other edit still turns this red.
+    ruled: "GTC-485: the email retry's maybes select loads the session date (one select)",
+    plus: [
+      {
+        file: 'src/lib/sms/decide-by-sender.ts',
+        sha256: '1399d2a831e157626f7d88342564e736544d5571b68252a3a0a39e1fcc48a3fb',
+        edited: true,
+      },
+    ],
   },
   {
     zone: 9,

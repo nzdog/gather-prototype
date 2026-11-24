@@ -200,6 +200,26 @@ const GTC444_EDITS: Array<[string, string]> = [
 /** A source with GTC-444's two lines, each found exactly once (else nothing matches). */
 const with444 = (s: string) =>
   GTC444_EDITS.reduce((x, [a, b]) => (count(x, a) === 1 ? x.replace(a, () => b) : '\u0000'), s);
+/**
+ * ⚠ [[GTC-485]] (25 Nov 2026, the founder's final word on its plan, item 4: "The hunks, the moved
+ * pins and the new suite as planned"). The pre-flight gains exactly this one insertion for G, the
+ * event's last day in the draft first line's facts (sent only while the sessions switch is on).
+ * Each is named here in full and must be found exactly once; the base with its older pieces and
+ * these must equal the file byte for byte. Any other edit, and any of them missing, repeated or
+ * changed, still turns P1 red. Nothing else in this file moves.
+ */
+const GTC485_EDITS: Array<[string, string]> = [
+  [
+    '            startDate: new Date(data.event.startDate),\n',
+    '            startDate: new Date(data.event.startDate),\n' +
+      '            // [[GTC-485]] G: the last day, only while the sessions switch is on and the event spans\n' +
+      '            // more than one date (a string on the wire, as the first day is).\n' +
+      '            ...(data.event.endDate ? { endDate: new Date(data.event.endDate) } : {}),\n',
+  ],
+];
+/** A source with GTC-485's one insertion, found exactly once (else nothing matches). */
+const with485 = (s: string) =>
+  GTC485_EDITS.reduce((x, [a, b]) => (count(x, a) === 1 ? x.replace(a, () => b) : '\u0000'), s);
 /** Step 5's box as the base drew it, and the page as drawn with Ticket D's change. */
 const STEP5_BOX =
   '<label class="flex items-center gap-2 shrink-0 cursor-pointer text-sm text-gray-600"><input type="checkbox" class="rounded border-gray-300 text-accent focus:ring-accent/40"/>Checked</label>';
@@ -375,7 +395,7 @@ export const CHECKS = {
     return (
       base.length > 1000 &&
       count(base, AFTER_WAITING) === 1 &&
-      now === with444(withD(base.replace(AFTER_WAITING, () => AFTER_WAITING + BUTTON)))
+      now === with485(with444(withD(base.replace(AFTER_WAITING, () => AFTER_WAITING + BUTTON))))
     );
   },
   /**
