@@ -1002,15 +1002,26 @@ async function main() {
     ),
     layout.slice(-300)
   );
-  const fetchesCard = cardSrc.match(/\bfetch\([^;]*/g) ?? [];
-  const fetchesComing = read(F.coming).match(/\bfetch\([^)]*\)?/g) ?? [];
+  // [[GTC-479]] fix, 24 Nov 2026 (the founder's standing word on my own new tests): each fetch is
+  // matched by its first argument. The first version ran from "fetch(" to the next semicolon, so two
+  // calls in one statement (the form's POST and PATCH) read as one and the count was 5, not 6.
+  const firstArgs = (src: string) =>
+    [...src.matchAll(/\bfetch\(\s*([^,)]+)/g)].map((m) => m[1].trim());
+  const fetchesCard = firstArgs(cardSrc);
+  const fetchesComing = firstArgs(read(F.coming));
+  const ALLOWED_CARD = [
+    '`/api/events/${eventId}/sessions`',
+    'daysUrl',
+    '`${daysUrl}/${at}`',
+    '`${daysUrl}/${id}`',
+  ];
   check(
     'U8',
     'the card asks only its own route and GTC-478\'s session routes; "Coming to" only PUT /sessions',
     fetchesCard.length === 6 &&
-      fetchesCard.every((f) => /\/api\/events\/\$\{eventId\}\/sessions`|daysUrl/.test(f)) &&
+      fetchesCard.every((f) => ALLOWED_CARD.includes(f)) &&
       fetchesComing.length === 1 &&
-      /\/api\/events\/\$\{eventId\}\/sessions`/.test(fetchesComing[0]) &&
+      fetchesComing[0] === '`/api/events/${eventId}/sessions`' &&
       /method: 'PUT'/.test(read(F.coming)),
     { fetchesCard, fetchesComing }
   );
