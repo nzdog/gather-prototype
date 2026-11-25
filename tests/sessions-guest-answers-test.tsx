@@ -598,6 +598,10 @@ async function main() {
       (
         await prisma.assignment.findMany({
           where: { id: { in: all.map((a) => a.id) } },
+          // [[GTC-481]] fix (25 Nov 2026, the founder's standing word on my own new tests): in name
+          // order, so the list is the same whatever order the database returns the rows in (an
+          // update moves a row; the first version's R4 read the rows unordered and failed on it).
+          orderBy: { item: { name: 'asc' } },
           select: { id: true, response: true, item: { select: { name: true } } },
         })
       ).map((a) => [a.item.name, a.response])
@@ -701,14 +705,14 @@ async function main() {
       JSON.stringify(r4.json?.declined) === JSON.stringify(['rolls']) &&
       JSON.stringify(after4) ===
         JSON.stringify({
-          salad: 'PENDING',
-          pavlova: 'PENDING',
-          ham: 'PENDING',
           biscuits: 'PENDING',
-          trifle: 'PENDING',
-          rolls: 'DECLINED',
-          wine: 'PENDING',
           chips: 'PENDING',
+          ham: 'PENDING',
+          pavlova: 'PENDING',
+          rolls: 'DECLINED',
+          salad: 'PENDING',
+          trifle: 'PENDING',
+          wine: 'PENDING',
         }),
     { status: r4.status, json: r4.json, after4 }
   );
