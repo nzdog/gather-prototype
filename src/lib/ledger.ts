@@ -279,6 +279,14 @@ export function whyTrigger(change: PendingChange, event: LifecycleEvent): WhyTri
     case 'EDIT_EVENT':
       return change.field && MATERIAL_FIELD_SET.has(change.field) ? 'T5' : null;
 
+    /*
+     * [[GTC-481]] E (decision 4): a session's date moved after the send asks why, as the event's own
+     * date does (T5): its guests were asked for that date. A rename or a new place on the same date
+     * is versioned and never asks. This takes the date out of GTC-478's note below.
+     */
+    case 'EDIT_DAY':
+      return change.field === 'date' ? 'T5' : null;
+
     // Everything else is versioned and never interrogated. Enumerated explicitly
     // rather than defaulted, so a new ChangeAction is a compile error here — adding
     // one is a decision, not an omission.
@@ -295,7 +303,6 @@ export function whyTrigger(change: PendingChange, event: LifecycleEvent): WhyTri
      * `dayId`, an ask field (GTC-477), and still asks.
      */
     case 'CREATE_DAY':
-    case 'EDIT_DAY':
     case 'DELETE_DAY':
     /*
      * [[GTC-479]] (decision 5, founder ruling 1, 24 Nov 2026): who comes to which session is

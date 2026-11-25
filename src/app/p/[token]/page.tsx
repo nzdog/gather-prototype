@@ -18,6 +18,7 @@ import { eventDropOffLine } from '@/lib/items/drop-off-words';
 import { INVITES_ONLY_WORDS } from '@/lib/setup/invites-only';
 import { whenLine } from '@/components/shared/EventDetails';
 import { askHostLine } from '@/lib/guest/questions-line';
+import GuestSessions from '@/components/sessions/GuestSessions';
 
 interface HostPreviewData {
   isHostPreview: true;
@@ -597,6 +598,16 @@ export default function ParticipantView() {
                 </p>
               </div>
             )}
+
+          {/* [[GTC-481]] A: the sessions the guest is down for, and a way to say they can't
+              make one. It draws nothing while the sessions switch is off, or with fewer than two
+              sessions. */}
+          <GuestSessions
+            token={token}
+            attendance={data.attendance}
+            assignments={data.assignments}
+            onChanged={fetchData}
+          />
 
           {/* GTC-191 (a) and (b) — TWO SECTIONS, NEVER INTERLEAVED, AND HERS FIRST.
               Hers first because that is the order her message takes: `askSystemVoice` emits

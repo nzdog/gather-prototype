@@ -153,6 +153,36 @@ const GTC485_PAIRS: Pairs = [
   ],
 ];
 
+/**
+ * ⚠ [[GTC-481]] (25 Nov 2026, the founder's ruling 6 on its plan: "the guest page's two pieces, the
+ * layout, and every pin move listed, each the narrowest way with a dated note"). The guest page gains
+ * exactly these two pieces for A, the guest's sessions card (one import; one placement, which draws
+ * nothing while the sessions switch is off). Each is named here in full and must be found exactly
+ * once; the base with its older pieces and these must equal the file byte for byte. Any other edit,
+ * and either of them missing, repeated or changed, still turns this check red.
+ */
+const GTC481_PAIRS: Pairs = [
+  [
+    "import { askHostLine } from '@/lib/guest/questions-line';\n",
+    "import { askHostLine } from '@/lib/guest/questions-line';\n" +
+      "import GuestSessions from '@/components/sessions/GuestSessions';\n",
+  ],
+  [
+    '          {/* GTC-191 (a) and (b) — TWO SECTIONS, NEVER INTERLEAVED, AND HERS FIRST.\n',
+    "          {/* [[GTC-481]] A: the sessions the guest is down for, and a way to say they can't\n" +
+      '              make one. It draws nothing while the sessions switch is off, or with fewer than two\n' +
+      '              sessions. */}\n' +
+      '          <GuestSessions\n' +
+      '            token={token}\n' +
+      '            attendance={data.attendance}\n' +
+      '            assignments={data.assignments}\n' +
+      '            onChanged={fetchData}\n' +
+      '          />\n' +
+      '\n' +
+      '          {/* GTC-191 (a) and (b) — TWO SECTIONS, NEVER INTERLEAVED, AND HERS FIRST.\n',
+  ],
+];
+
 // ── Files and commits ────────────────────────────────────────────────────────
 const PAGE = 'src/app/p/[token]/page.tsx';
 const SUITE = 'tests/tweaks-e-test.tsx';
@@ -324,6 +354,13 @@ const MODULES: Record<string, unknown> = {
   '@/lib/setup/invites-only': InvitesOnly,
   '@/components/shared/EventDetails': EventDetails,
   '@/lib/guest/questions-line': QuestionsLine,
+  /*
+   * ⚠ [[GTC-481]] (25 Nov 2026, the founder's ruling 6): the guest page's one new import, its
+   * sessions card, stands in here as a part that draws nothing: these checks are about the page
+   * with the sessions switch off, where the real card draws nothing and asks for nothing (held by
+   * tests/sessions-guest-answers-test.tsx). Nothing else is added to this list.
+   */
+  '@/components/sessions/GuestSessions': { __esModule: true, default: () => null },
 };
 export interface Loaded {
   View: () => ReactAll.ReactElement;
@@ -790,7 +827,7 @@ function layerP(now: string, base: string) {
     CHECKS.exactly(atRef(CODE_E, PAGE), base) &&
       atRef(`${CODE_I}^`, PAGE) === atRef(CODE_E, PAGE) &&
       now.length > 1000 &&
-      now === applyPairs(atRef(CODE_I, PAGE), [...GTC444_PAIRS, ...GTC485_PAIRS])
+      now === applyPairs(atRef(CODE_I, PAGE), [...GTC444_PAIRS, ...GTC485_PAIRS, ...GTC481_PAIRS])
   );
   assert(
     'P',

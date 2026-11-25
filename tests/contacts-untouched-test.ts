@@ -168,6 +168,20 @@ const GTC479_SRC = [
  * the scans.
  */
 const GTC480_SRC = ['src/components/sessions/SessionTabs.tsx'];
+/*
+ * ⚠ THREE NAMED FILES AT [[GTC-481]] (25 Nov 2026, the founder's ruling 6 on its plan: "every pin
+ * move listed, each the narrowest way with a dated note"). The guest's sessions route imports the
+ * server and logs its errors; the guest page's layout imports Next's `connection` to read the
+ * sessions switch on the server; the guest's sessions card reads and writes through fetch. So they
+ * are named out of the new files' scans (N) by their exact paths, as GTC-479's are. GTC-481's other
+ * new src file, src/lib/sessions/answers.ts, imports only GTC-479's card words and stays in the
+ * scans.
+ */
+const GTC481_SRC = [
+  'src/app/api/p/[token]/sessions/route.ts',
+  'src/app/p/[token]/layout.tsx',
+  'src/components/sessions/GuestSessions.tsx',
+];
 const newSrc = added.filter(
   (p) =>
     p.startsWith('src/') &&
@@ -176,6 +190,7 @@ const newSrc = added.filter(
     !GTC478_SRC.includes(p) &&
     !GTC479_SRC.includes(p) &&
     !GTC480_SRC.includes(p) &&
+    !GTC481_SRC.includes(p) &&
     fs.existsSync(onDisk(p))
 );
 

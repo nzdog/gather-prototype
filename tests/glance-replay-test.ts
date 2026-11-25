@@ -3266,11 +3266,17 @@ async function main() {
      * listed, each the narrowest move with a dated note"): the sessions route `sessions` (GET, PUT),
      * classified SESSION. Named below, as the seven before it are. The count moves by that one entry
      * and nothing else.
+     *
+     * ⚠ 89 → 90 AT [[GTC-481]] (25 Nov 2026, the founder's ruling 6 on its plan: "every pin move
+     * listed, each the narrowest way with a dated note"): the guest's sessions route
+     * `p/:token/sessions` (GET, PUT), classified TOKEN. Named below, as the eight before it are. The
+     * count moves by that one entry and nothing else.
      */
     assert(
       'layer 4 / inventory',
-      'and the surface is 89 routes — 81 at phase 4, plus GTC-296’s unsubscribe handler, GTC-311’s chase-choice route, GTC-251’s hand-back, GTC-264’s TNZ webhook, GTC-290’s TNZ status poll, GTC-472’s share route, GTC-478’s session route and GTC-479’s sessions route',
-      classifications.length === 89 &&
+      'and the surface is 90 routes — 81 at phase 4, plus GTC-296’s unsubscribe handler, GTC-311’s chase-choice route, GTC-251’s hand-back, GTC-264’s TNZ webhook, GTC-290’s TNZ status poll, GTC-472’s share route, GTC-478’s session route, GTC-479’s sessions route and GTC-481’s guest sessions route',
+      classifications.length === 90 &&
+        classifications.some((e: any) => e.apiPath === '/api/p/:token/sessions') &&
         classifications.some((e: any) => e.apiPath === '/api/events/:id/sessions') &&
         classifications.some((e: any) => e.apiPath === '/api/events/:id/days/:dayId') &&
         classifications.some((e: any) => e.apiPath === '/api/events/:id/items/:itemId/share') &&

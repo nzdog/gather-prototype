@@ -4719,6 +4719,329 @@ async function testSuite22_WhoComesStaysInItsEvent(fixtures: Fixtures) {
   }
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Test Suite 23: [[GTC-481]] — the guest's own sessions: the new address is closed while the switch
+// is off; it takes only a guest's own link; and it changes only that guest's own marks and that
+// guest's own dishes, on the event that link opens.
+//
+// The founder's rulings on the plan, 25 Nov 2026 (docs/tickets/GTC-481.md), ruling 6: "the new
+// address /api/p/:token/sessions ... Suite 23 (security 294 to 309, none weakened)"; the brief: "The
+// guest's link may change only that guest's own marks ... on that event, never another guest's or
+// another event's. Prove it in the security suite: add checks, weaken none." GTC-478's ruling D:
+// while GATHER_SESSIONS is off the address answers as before it existed (404).
+//
+// TWO HALVES, as Suites 21 and 22. Over HTTP to the dev server (switch off): GET and PUT answer 404
+// to the guest's own link and to a made-up one, and write nothing. In this process with the switch
+// ON for this process only: a made-up link, a host link and a coordinator link 403; a session of
+// another event, a made-up session and a missing answer 400, nothing written; the GET shows only this
+// event's sessions and this guest's marks; a body naming another guest changes only the link
+// holder's mark and dishes; the last session 409; another guest's link cannot undo the mark.
+//
+// Its own fixture: events A and B of its own (each with a team), sessions lunch and dinner on A and
+// one on B; Kim on A and B, Ray on A; Kim's dishes on A's lunch, A's dinner, A's whole event and B's
+// session, and Ray's on A's lunch; Ray marked as not at A's dinner (made directly); Kim's guest links
+// for A and B, Ray's for A, and Kim's host and coordinator links for A. All removed by name at the
+// end, and at the start if a run was cut off. Nothing here can send: the address writes marks,
+// answers, a ledger line and an invite-log line. The OutboundMessage count is asserted all the same.
+// ─────────────────────────────────────────────────────────────────────────────
+
+const GTC481_TAG = 'gtc481-sec';
+
+async function gtc481RemoveOwnRows() {
+  // Its items (their assignments go with them), then its events (their teams, sessions, marks,
+  // places, links and ledger rows go with them), then its people and their invite-log lines.
+  await prisma.item.deleteMany({ where: { name: { startsWith: GTC481_TAG } } });
+  await prisma.event.deleteMany({ where: { name: { startsWith: GTC481_TAG } } });
+  const people = await prisma.person.findMany({
+    where: { name: { startsWith: GTC481_TAG } },
+    select: { id: true },
+  });
+  if (people.length > 0) {
+    const ids = people.map((p) => p.id);
+    await prisma.inviteEvent.deleteMany({ where: { personId: { in: ids } } });
+    await prisma.auditEntry.deleteMany({ where: { actorId: { in: ids } } });
+    await prisma.person.deleteMany({ where: { id: { in: ids } } });
+  }
+}
+
+async function testSuite23_GuestSessionsStayTheGuests(fixtures: Fixtures) {
+  logSection(
+    "Test Suite 23: GTC-481 — the guest's own sessions: closed while the switch is off, own link, own marks and dishes"
+  );
+
+  const BASE = process.env.SECURITY_TEST_BASE_URL ?? 'http://localhost:3000';
+  const ROUTE = '../src/app/api/p/[token]/sessions/route';
+  const SWITCH = 'GATHER_SESSIONS';
+  const notOnEvent = 'That session is not on this event';
+  const comingMissing = 'Say whether you can make this session';
+  const lastSession = "That's the only session you're down for";
+
+  await gtc481RemoveOwnRows();
+  try {
+    // ── The fixture ──────────────────────────────────────────────────────────
+    const ON = new Date('2026-12-25T00:00:00.000Z');
+    const makeEvent = (label: string) =>
+      prisma.event.create({
+        data: {
+          name: `${GTC481_TAG} event ${label}`,
+          startDate: ON,
+          endDate: new Date('2026-12-26T00:00:00.000Z'),
+          status: 'DRAFT',
+          hostId: fixtures.host.id,
+        },
+      });
+    const evA = await makeEvent('A');
+    const evB = await makeEvent('B');
+    const teamA = await prisma.team.create({ data: { name: `${GTC481_TAG} A`, eventId: evA.id } });
+    const teamB = await prisma.team.create({ data: { name: `${GTC481_TAG} B`, eventId: evB.id } });
+    const kim = await prisma.person.create({ data: { name: `${GTC481_TAG} Kim` } });
+    const ray = await prisma.person.create({ data: { name: `${GTC481_TAG} Ray` } });
+    const kimOnA = await prisma.personEvent.create({
+      data: { personId: kim.id, eventId: evA.id, teamId: teamA.id, role: 'PARTICIPANT' },
+    });
+    const kimOnB = await prisma.personEvent.create({
+      data: { personId: kim.id, eventId: evB.id, teamId: teamB.id, role: 'PARTICIPANT' },
+    });
+    const rayOnA = await prisma.personEvent.create({
+      data: { personId: ray.id, eventId: evA.id, teamId: teamA.id, role: 'PARTICIPANT' },
+    });
+    const lunchA = await prisma.day.create({
+      data: { name: `${GTC481_TAG} lunch`, date: ON, eventId: evA.id },
+    });
+    const dinnerA = await prisma.day.create({
+      data: { name: `${GTC481_TAG} dinner`, date: ON, eventId: evA.id, displayOrder: 1 },
+    });
+    const dayB = await prisma.day.create({
+      data: { name: `${GTC481_TAG} session of B`, date: ON, eventId: evB.id },
+    });
+    await prisma.sessionAbsence.create({ data: { personEventId: rayOnA.id, dayId: dinnerA.id } });
+    const dish = async (teamId: string, personId: string, label: string, dayId: string | null) => {
+      const item = await prisma.item.create({
+        data: { name: `${GTC481_TAG} ${label}`, teamId, status: 'ASSIGNED', dayId },
+      });
+      return prisma.assignment.create({ data: { itemId: item.id, personId, response: 'PENDING' } });
+    };
+    const kimLunch = await dish(teamA.id, kim.id, 'pavlova', lunchA.id);
+    const kimDinner = await dish(teamA.id, kim.id, 'ham', dinnerA.id);
+    const kimWhole = await dish(teamA.id, kim.id, 'bread', null);
+    const kimOnBDish = await dish(teamB.id, kim.id, 'salad', dayB.id);
+    const rayLunch = await dish(teamA.id, ray.id, 'trifle', lunchA.id);
+    const link = async (personId: string, eventId: string, scope: any, teamId?: string) => {
+      const token = randomBytes(32).toString('hex');
+      await prisma.accessToken.create({
+        data: { token, scope, personId, eventId, ...(teamId ? { teamId } : {}) },
+      });
+      return token;
+    };
+    const kimLinkA = await link(kim.id, evA.id, 'PARTICIPANT');
+    const rayLinkA = await link(ray.id, evA.id, 'PARTICIPANT');
+    const kimHostA = await link(kim.id, evA.id, 'HOST');
+    const kimCoordA = await link(kim.id, evA.id, 'COORDINATOR', teamA.id);
+
+    const dishes = [kimLunch, kimDinner, kimWhole, kimOnBDish, rayLunch];
+    /** What any of these calls could have written: marks, answers, the ledger, the log, a send. */
+    const footprint = async () =>
+      JSON.stringify([
+        await prisma.sessionAbsence.findMany({
+          where: { personEventId: { in: [kimOnA.id, kimOnB.id, rayOnA.id] } },
+          orderBy: { id: 'asc' },
+          select: { personEventId: true, dayId: true },
+        }),
+        await prisma.assignment.findMany({
+          where: { id: { in: dishes.map((d) => d.id) } },
+          orderBy: { id: 'asc' },
+          select: { id: true, response: true },
+        }),
+        await prisma.auditEntry.count({ where: { eventId: { in: [evA.id, evB.id] } } }),
+        await prisma.inviteEvent.count({ where: { personId: { in: [kim.id, ray.id] } } }),
+        await prisma.outboundMessage.count(),
+      ]);
+    const atStart = await footprint();
+    const outboundAtStart = await prisma.outboundMessage.count();
+    const responseOf = async (id: string) =>
+      (await prisma.assignment.findUnique({ where: { id }, select: { response: true } }))?.response;
+
+    // ── The HTTP half: the dev server, switch off ─────────────────────────────
+    const http = async (method: string, url: string, body?: unknown) => {
+      try {
+        const res = await fetch(`${BASE}${url}`, {
+          method,
+          headers: body !== undefined ? { 'Content-Type': 'application/json' } : {},
+          ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+        });
+        return res.status;
+      } catch {
+        return 0;
+      }
+    };
+    const healthy = (await http('GET', `/api/events/${evA.id}/people`)) === 401;
+    const hOff = healthy
+      ? [
+          await http('GET', `/api/p/${kimLinkA}/sessions`),
+          await http('PUT', `/api/p/${kimLinkA}/sessions`, { dayId: lunchA.id, coming: false }),
+          await http('GET', '/api/p/gtc481-not-a-real-link/sessions'),
+          await http('PUT', '/api/p/gtc481-not-a-real-link/sessions', {
+            dayId: lunchA.id,
+            coming: false,
+          }),
+        ]
+      : [];
+    logTest(
+      "switch off: GET and PUT /api/p/:token/sessions answer 404 to the guest's own link and to a made-up one, as before the address existed, and nothing is written",
+      healthy && hOff.join(',') === '404,404,404,404' && (await footprint()) === atStart,
+      healthy
+        ? hOff.join(', ')
+        : 'the dev server is not healthy on 3000 (start it with npm run dev)'
+    );
+
+    // ── The in-process half: switch on, for this process only ─────────────────
+    const env = process.env as Record<string, string | undefined>;
+    const call = async (method: 'GET' | 'PUT', token: string, body?: unknown, switchOn = true) => {
+      if (switchOn) env[SWITCH] = 'on';
+      else delete env[SWITCH];
+      try {
+        // callRoute's type lists no PUT; it calls mod[method] all the same.
+        return await callRoute(ROUTE, method as any, `/api/p/${token}/sessions`, { token }, body);
+      } catch (e) {
+        return { status: -1, json: { threw: (e as Error).message } };
+      } finally {
+        delete env[SWITCH];
+      }
+    };
+    const say = (dayId: string, coming: boolean, extra: Record<string, unknown> = {}) => ({
+      dayId,
+      coming,
+      ...extra,
+    });
+
+    const shut = [
+      await call('GET', kimLinkA, undefined, false),
+      await call('PUT', kimLinkA, say(lunchA.id, false), false),
+    ];
+    logTest(
+      "switch unset in this process, the guest's own link: GET and PUT 404, nothing written",
+      shut.map((r) => r.status).join(',') === '404,404' && (await footprint()) === atStart,
+      shut.map((r) => r.status).join(', ')
+    );
+    const madeUp = [
+      await call('GET', 'gtc481-not-a-real-link'),
+      await call('PUT', 'gtc481-not-a-real-link', say(lunchA.id, false)),
+    ];
+    logTest(
+      'switch on, a made-up link: GET and PUT 403',
+      madeUp.every((r) => r.status === 403),
+      madeUp.map((r) => r.status).join(', ')
+    );
+    const notGuest = [
+      await call('GET', kimHostA),
+      await call('PUT', kimHostA, say(lunchA.id, false)),
+      await call('GET', kimCoordA),
+      await call('PUT', kimCoordA, say(lunchA.id, false)),
+    ];
+    logTest(
+      "switch on, Kim's own HOST link and COORDINATOR link on A: GET and PUT 403 (only a guest's link)",
+      notGuest.every((r) => r.status === 403),
+      notGuest.map((r) => r.status).join(', ')
+    );
+    const otherEvent = await call('PUT', kimLinkA, say(dayB.id, false));
+    logTest(
+      `switch on, Kim's link for A with the session of B (Kim is on B too): 400 "${notOnEvent}"`,
+      otherEvent.status === 400 && otherEvent.json?.error === notOnEvent,
+      `${otherEvent.status} ${JSON.stringify(otherEvent.json)}`
+    );
+    const ghost = await call('PUT', kimLinkA, say('no-such-session', false));
+    logTest(
+      `switch on, Kim's link for A with a made-up session: 400 "${notOnEvent}"`,
+      ghost.status === 400 && ghost.json?.error === notOnEvent,
+      `${ghost.status} ${JSON.stringify(ghost.json)}`
+    );
+    const noAnswer = await call('PUT', kimLinkA, { dayId: lunchA.id });
+    logTest(
+      `switch on, Kim's link for A with no answer: 400 "${comingMissing}"`,
+      noAnswer.status === 400 && noAnswer.json?.error === comingMissing,
+      `${noAnswer.status} ${JSON.stringify(noAnswer.json)}`
+    );
+    const read = await call('GET', kimLinkA);
+    const shown = (read.json?.sessions ?? []).map((s: any) => `${s.id}:${s.coming}`);
+    logTest(
+      "switch on, Kim's GET on A: A's two sessions only, both coming (Ray's mark on A's dinner is Ray's, not Kim's; B's session is not shown)",
+      read.status === 200 &&
+        JSON.stringify(shown) === JSON.stringify([`${lunchA.id}:true`, `${dinnerA.id}:true`]),
+      `${read.status} ${JSON.stringify(shown)}`
+    );
+    logTest(
+      '  ...CONTROL: no refusal or read above wrote a mark, an answer, a ledger or log line, or a send',
+      (await footprint()) === atStart
+    );
+
+    const mine = await call(
+      'PUT',
+      kimLinkA,
+      say(lunchA.id, false, { personEventId: rayOnA.id, personId: ray.id })
+    );
+    const marksNow = await prisma.sessionAbsence.findMany({
+      where: { personEventId: { in: [kimOnA.id, kimOnB.id, rayOnA.id] } },
+      orderBy: { dayId: 'asc' },
+      select: { personEventId: true, dayId: true },
+    });
+    const logged = await (async () => {
+      for (let i = 0; i < 50; i++) {
+        if ((await prisma.inviteEvent.count({ where: { personId: kim.id } })) === 1) return true;
+        await new Promise((r) => setTimeout(r, 100));
+      }
+      return false;
+    })();
+    logTest(
+      "switch on, Kim's link for A, not coming to A's lunch, with Ray's place and id in the body: 200, and the one new mark is Kim's own on A's lunch (Ray's only mark is still his own on A's dinner)",
+      mine.status === 200 &&
+        marksNow.length === 2 &&
+        marksNow.some((m) => m.personEventId === kimOnA.id && m.dayId === lunchA.id) &&
+        marksNow.some((m) => m.personEventId === rayOnA.id && m.dayId === dinnerA.id) &&
+        logged,
+      `${mine.status} ${JSON.stringify(marksNow)}`
+    );
+    const after = [
+      await responseOf(kimLunch.id),
+      await responseOf(rayLunch.id),
+      await responseOf(kimDinner.id),
+      await responseOf(kimWhole.id),
+      await responseOf(kimOnBDish.id),
+    ];
+    logTest(
+      "  ...and only Kim's own dish on A's lunch is No: Ray's dish on that session, Kim's on A's dinner, Kim's whole-event dish and Kim's dish on B are unchanged",
+      after.join(',') === 'DECLINED,PENDING,PENDING,PENDING,PENDING',
+      after.join(', ')
+    );
+    const beforeLast = await footprint();
+    const last = await call('PUT', kimLinkA, say(dinnerA.id, false));
+    logTest(
+      `switch on, Kim's link for A, not coming to A's dinner, the only session left: 409 "${lastSession}", nothing written`,
+      last.status === 409 && last.json?.error === lastSession && (await footprint()) === beforeLast,
+      `${last.status} ${JSON.stringify(last.json)}`
+    );
+    const raysTry = await call('PUT', rayLinkA, say(lunchA.id, true));
+    logTest(
+      "switch on, Ray's link for A, coming to A's lunch: 200 and nothing written (Ray has no mark there), and Kim's mark on it stays: one guest's link cannot undo another's",
+      raysTry.status === 200 && (await footprint()) === beforeLast,
+      `${raysTry.status}`
+    );
+    const back = await call('PUT', kimLinkA, say(lunchA.id, true));
+    const kimMarks = await prisma.sessionAbsence.count({ where: { personEventId: kimOnA.id } });
+    logTest(
+      "  ...CONTROL: Kim's link for A, coming to A's lunch again: 200, Kim's mark gone, Kim's pavlova still No (the address never answers a dish Yes)",
+      back.status === 200 && kimMarks === 0 && (await responseOf(kimLunch.id)) === 'DECLINED',
+      `${back.status} marks ${kimMarks}`
+    );
+    logTest(
+      '  ...CONTROL: nothing was sent (the OutboundMessage count as found), and the switch is unset again',
+      (await prisma.outboundMessage.count()) === outboundAtStart && env[SWITCH] === undefined
+    );
+  } finally {
+    delete process.env[SWITCH];
+    await gtc481RemoveOwnRows();
+  }
+}
+
 async function main() {
   console.log(`${BOLD}${YELLOW}=== Security Validation Test Suite ===${RESET}\n`);
   console.log('Contract under test:');
@@ -4753,6 +5076,7 @@ async function main() {
     await testSuite20_OneAccountPerAddress();
     await testSuite21_SessionRoutesStayInTheirEvent(fixtures);
     await testSuite22_WhoComesStaysInItsEvent(fixtures);
+    await testSuite23_GuestSessionsStayTheGuests(fixtures);
 
     console.log(`\n${BOLD}${YELLOW}=== Test Summary ===${RESET}`);
     console.log(`Total tests: ${testsRun}`);

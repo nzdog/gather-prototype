@@ -1451,11 +1451,14 @@ async function runLive() {
   // ⚠ 114 → 115 AND 88 → 89 AT [[GTC-479]] (24 Nov 2026, the founder's ruling 2 on its plan: "the older
   // pins you listed, each the narrowest move with a dated note"): the sessions route,
   // `events/[id]/sessions/route.ts`, and its one classification entry. Nothing else in this check changed.
+  // ⚠ 115 → 116 AND 89 → 90 AT [[GTC-481]] (25 Nov 2026, the founder's ruling 6 on its plan: "every pin
+  // move listed, each the narrowest way with a dated note"): the guest's sessions route,
+  // `p/[token]/sessions/route.ts`, and its one classification entry. Nothing else in this check changed.
   assert(
     'S',
-    `Z1 CONTROL: no new route (115 route.ts, 89 classifications: the share route, GTC-472, the session route, GTC-478, and the sessions route, GTC-479, are the ones added); aiCallsUsed 0 on every event; every row removed by id (${whileExists} while it existed); totals as found (${before.invite}/${before.outbound} -> ${after.invite}/${after.outbound})`,
-    routes(join(process.cwd(), 'src/app/api')) === 115 &&
-      classified.length === 89 &&
+    `Z1 CONTROL: no new route (116 route.ts, 90 classifications: the share route, GTC-472, the session route, GTC-478, the sessions route, GTC-479, and the guest’s sessions route, GTC-481, are the ones added); aiCallsUsed 0 on every event; every row removed by id (${whileExists} while it existed); totals as found (${before.invite}/${before.outbound} -> ${after.invite}/${after.outbound})`,
+    routes(join(process.cwd(), 'src/app/api')) === 116 &&
+      classified.length === 90 &&
       ai.length === 9 &&
       ai.every((e) => e.aiCallsUsed === 0) &&
       whileExists.length > 0 &&

@@ -640,6 +640,14 @@
     "securityIssues": []
   },
   {
+    "filePath": "src/app/api/p/[token]/sessions/route.ts",
+    "apiPath": "/api/p/:token/sessions",
+    "methods": ["GET", "PUT"],
+    "authType": "TOKEN",
+    "authEvidence": ["resolveToken"],
+    "securityIssues": []
+  },
+  {
     "filePath": "src/app/api/sms/tnz-webhook/route.ts",
     "apiPath": "/api/sms/tnz-webhook",
     "methods": ["POST"],

@@ -75,6 +75,18 @@ const git = (args: string[]) => {
   }
 };
 const atBase = (rel: string) => git(['show', `${BASE}:${rel}`]) ?? '';
+/**
+ * ⚠ [[GTC-481]] (25 Nov 2026, the founder's ruling 6 on its plan: "sessions-guests-clock's K checks
+ * read GTC-485's merge 6e84218, as described"). K14 and E3 (the guest page), K19, K20, K22 and K23
+ * state GTC-485's own facts: the page's four pieces and imports, no new source file, the 18 edited
+ * files, no new route, one script line. GTC-481 edits the page and adds files and a route, so these
+ * read the tree as GTC-485 merged it (MERGED) instead of the working folder: they still prove
+ * exactly what GTC-485 did. GTC-481's own suite holds its own files the same way. Every other check
+ * here, K21 and K1 to K18 but K14 among them, still reads the working folder.
+ */
+const MERGED = '6e84218';
+const atMerged = (rel: string) => git(['show', `${MERGED}:${rel}`]) ?? '';
+const READ_AT_MERGE = ['src/app/p/[token]/page.tsx'];
 /** git with pathspec patterns read as patterns (for `tests/security-*`). */
 const gitGlob = (args: string[]) => {
   try {
@@ -853,7 +865,7 @@ async function main() {
     ) && count(route, '...sessionLabel(a.item.day)') === 2,
     count(route, '...sessionLabel(a.item.day)')
   );
-  const page = read('src/app/p/[token]/page.tsx');
+  const page = atMerged('src/app/p/[token]/page.tsx'); // [[GTC-481]]: as GTC-485 merged it
   check(
     'E3',
     'the page: the label where the name was, on the card and the preview; no new import',
@@ -961,10 +973,13 @@ async function main() {
     check(
       `K${k}`,
       `${file}: 8454fed plus exactly its ${hunks.length} named hunk(s)`,
-      want !== null && read(file) === want
+      want !== null && (READ_AT_MERGE.includes(file) ? atMerged(file) : read(file)) === want
     );
   }
-  const srcNow = (git(['ls-files', 'src']) ?? '').split('\n').filter(Boolean);
+  // [[GTC-481]]: the source files as GTC-485 merged them; nothing untracked, read live.
+  const srcNow = (git(['ls-tree', '-r', '--name-only', MERGED, 'src']) ?? '')
+    .split('\n')
+    .filter(Boolean);
   const srcBase = (git(['ls-tree', '-r', '--name-only', BASE, 'src']) ?? '')
     .split('\n')
     .filter(Boolean);
@@ -975,7 +990,8 @@ async function main() {
     JSON.stringify(srcNow.sort()) === JSON.stringify(srcBase.sort()) && untrackedSrc === '',
     { now: srcNow.length, base: srcBase.length, untrackedSrc }
   );
-  const changed = (git(['diff', '--name-only', BASE, '--', 'src']) ?? '')
+  // [[GTC-481]]: the files GTC-485 edited, 8454fed to its merge.
+  const changed = (git(['diff', '--name-only', BASE, MERGED, '--', 'src']) ?? '')
     .split('\n')
     .filter(Boolean);
   check(
@@ -1000,6 +1016,7 @@ async function main() {
       'diff',
       '--quiet',
       BASE,
+      MERGED, // [[GTC-481]]: as GTC-485 merged them
       '--',
       'prisma',
       'route-classifications.json',
@@ -1009,7 +1026,7 @@ async function main() {
         git(['ls-files', '--others', '--exclude-standard', 'prisma', 'src/app/api']) ?? 'x'
       ).trim() === ''
   );
-  const pkgNow = JSON.parse(read('package.json'));
+  const pkgNow = JSON.parse(atMerged('package.json') || '{}'); // [[GTC-481]]: as GTC-485 merged it
   const pkgBase = JSON.parse(atBase('package.json') || '{}');
   const SCRIPT = 'test:sessions-guests-clock';
   const VALUE = 'tsx --tsconfig tests/tsconfig.json tests/sessions-guests-clock-test.tsx';

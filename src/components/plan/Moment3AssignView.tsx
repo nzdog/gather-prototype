@@ -93,7 +93,7 @@ import Moment3ItemDetail, {
   answerWords,
   type Moment3ItemDetailChanges,
 } from './Moment3ItemDetail';
-import { SessionTabRow, useSessionTabs } from '@/components/sessions/SessionTabs';
+import { SessionTabRow, useAwayWarning, useSessionTabs } from '@/components/sessions/SessionTabs';
 import { TAB_WORDS, WHOLE_EVENT } from '@/lib/sessions/tabs';
 
 /** [[GTC-472]] — a copy made by a share this session: its row, and the row it sits directly under. */
@@ -370,6 +370,18 @@ export default function Moment3AssignView({
     const row = allItems.find((i) => i.id === arriveAtItem);
     if (row) openTab(tabKeyOf(row));
   }, [tabsOn, arriveAtItem, allItems, openTab, tabKeyOf]);
+  /*
+   * [[GTC-481]] C (decision 3): who is marked as not at which session, read from the session plan,
+   * each person found by their place on the event (the households' rows). Off, or no marks: nobody.
+   */
+  const { isAway, ask: askAway, element: awayBox } = useAwayWarning();
+  const placeOf = useMemo(
+    () =>
+      new Map(
+        households.flatMap((h) => h.members.map((m) => [m.personId, (m as { id?: string }).id]))
+      ),
+    [households]
+  );
   // [[GTC-385]] (item 59, Q11): the key shows only when a dish is marked; here without "tap a dish".
   const anyMarks = allItems.some((i) => (i.marks?.length ?? 0) > 0);
   const panelItems: PanelItemInput[] = useMemo(
@@ -394,6 +406,8 @@ export default function Moment3AssignView({
     [households, marks, panelItems, hostPersonId]
   );
   const nameOf = (personId: string) => rows.find((r) => r.personId === personId)?.name ?? '';
+  // [[GTC-481]] C (ruling 3): "Want me to suggest?" never suggests someone marked as not at the
+  // dish's session.
   const proposals = useMemo(
     () =>
       suggestAssignments(
@@ -403,8 +417,10 @@ export default function Moment3AssignView({
           assigneePersonId: holders[i.id]?.personId ?? null,
         })),
         rows
+      ).filter(
+        (g) => !isAway(placeOf.get(g.personId), allItems.find((i) => i.id === g.itemId)?.dayId)
       ),
-    [allItems, holders, rows]
+    [allItems, holders, rows, isAway, placeOf]
   );
   const unassigned = panelItems.filter((i) => i.assignment === null).length;
   const panel = completionPanel({
@@ -459,6 +475,16 @@ export default function Moment3AssignView({
     }
   };
 
+  /**
+   * [[GTC-481]] C (decision 3): a session's dish given or moved to someone marked as not at that
+   * session asks first. True to go on; false when the host picks someone else.
+   */
+  const warnIfAway = async (itemId: string, personId: string | null): Promise<boolean> => {
+    const item = allItems.find((i) => i.id === itemId);
+    if (!personId || !item?.dayId || !isAway(placeOf.get(personId), item.dayId)) return true;
+    return askAway(nameOf(personId), item.name, item.dayId);
+  };
+
   /** One change, shown at once (dimmed) and saved; after the send its why is asked first. */
   const change = async (
     itemId: string,
@@ -468,6 +494,11 @@ export default function Moment3AssignView({
     if (itemId in pending || asking.current) return;
     setPending((prev) => ({ ...prev, [itemId]: personId }));
     asking.current = true;
+    if (!(await warnIfAway(itemId, personId))) {
+      asking.current = false;
+      setPending((prev) => without(prev, itemId));
+      return;
+    }
     const answer = await askForReason(
       { action, targetType: 'Assignment', targetId: itemId },
       event
@@ -642,6 +673,11 @@ export default function Moment3AssignView({
     lines: ShareAmountLine[]
   ): Promise<boolean> => {
     if (item.id in pending || asking.current) return false;
+    // [[GTC-481]] C: the copy is on the dish's session, so the same warning first.
+    asking.current = true;
+    const goOn = await warnIfAway(item.id, personId);
+    asking.current = false;
+    if (!goOn) return false;
     const cut = preview.rows.filter((r) => {
       const line = lines.find((l) => l.itemId === r.itemId);
       return line && r.amount !== null && line.amount < r.amount;
@@ -1224,6 +1260,8 @@ export default function Moment3AssignView({
 
       {/* [[GTC-406]] — the dish's box, over everything, while it is open. */}
       {detailBox}
+      {/* [[GTC-481]] C — the warning, over the box too, while it is open. */}
+      {awayBox}
     </div>
   );
 }

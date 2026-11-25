@@ -44,6 +44,13 @@ import {
   type Tab,
   type TabSession,
 } from '@/lib/sessions/tabs';
+import {
+  AWAY_WORDS,
+  sessionHeadcounts,
+  tabDateLine,
+  type HeadcountHousehold,
+  type SessionMark,
+} from '@/lib/sessions/answers';
 
 interface SessionPlan {
   sessions: TabSession[];
@@ -52,11 +59,19 @@ interface SessionPlan {
   setOpen: (key: string) => void;
   /** Asks the sessions route again (a view calls it when it opens). */
   load: () => void;
+  /** [[GTC-481]] C and D: each household's named people, and who is not at which session. */
+  households: HeadcountHousehold[];
+  absences: SessionMark[];
 }
 
 const SessionPlanContext = createContext<SessionPlan | null>(null);
 const NO_SESSIONS: TabSession[] = [];
 const noop = () => {};
+/** [[GTC-481]]: no households and no marks, until the sessions route answers. */
+const NO_MARKS: { households: HeadcountHousehold[]; absences: SessionMark[] } = {
+  households: [],
+  absences: [],
+};
 
 export function SessionPlanProvider({
   children,
@@ -77,6 +92,7 @@ export function SessionPlanProvider({
   const eventId = givenEventId ?? fromAddress;
   const [sessions, setSessions] = useState<TabSession[]>(initialSessions ?? NO_SESSIONS);
   const [open, setOpen] = useState<string | null>(initialOpen);
+  const [marks, setMarks] = useState(NO_MARKS);
 
   const load = useCallback(() => {
     if (!on || !eventId) return;
@@ -84,9 +100,18 @@ export function SessionPlanProvider({
       try {
         const res = await fetch(`/api/events/${eventId}/sessions`);
         if (!res.ok) return;
-        const body = (await res.json()) as { sessions?: TabSession[] };
+        const body = (await res.json()) as {
+          sessions?: TabSession[];
+          households?: HeadcountHousehold[];
+          absences?: SessionMark[];
+        };
         if (!Array.isArray(body.sessions)) return;
         setSessions(body.sessions.map(({ id, name, date }) => ({ id, name, date })));
+        // [[GTC-481]] C and D: the same reply's households and marks, for the warning and the counts.
+        setMarks({
+          households: Array.isArray(body.households) ? body.households : [],
+          absences: Array.isArray(body.absences) ? body.absences : [],
+        });
       } catch {
         // Not loaded: the screens stay as they are without sessions.
       }
@@ -94,8 +119,8 @@ export function SessionPlanProvider({
   }, [on, eventId]);
 
   const plan = useMemo<SessionPlan | null>(
-    () => (on ? { sessions, open, setOpen, load } : null),
-    [on, sessions, open, load]
+    () => (on ? { sessions, open, setOpen, load, ...marks } : null),
+    [on, sessions, open, load, marks]
   );
   return <SessionPlanContext.Provider value={plan}>{children}</SessionPlanContext.Provider>;
 }
@@ -111,6 +136,8 @@ export interface SessionTabsView<C> {
   shown: C[];
   /** The tab a row is on. */
   keyOf: (row: SessionRow) => string;
+  /** [[GTC-481]] D: how many are at each session, by its id; null until the households are read. */
+  headcounts: Record<string, number> | null;
 }
 
 export function useSessionTabs<C extends { items: readonly SessionRow[] }>(
@@ -150,7 +177,21 @@ export function useSessionTabs<C extends { items: readonly SessionRow[] }>(
     [on, categories, open, sessions]
   );
   const keyOf = useCallback((row: SessionRow) => tabOf(row, sessions), [sessions]);
-  return { on, tabs, open, setOpen: setOpen ?? noop, shown, keyOf };
+  // [[GTC-481]] D: each session's headcount, from the households and marks the route gave.
+  const households = plan?.households;
+  const absences = plan?.absences;
+  const headcounts = useMemo(
+    () =>
+      on && households && absences && households.length > 0
+        ? sessionHeadcounts(
+            sessions.map((s) => s.id),
+            households,
+            absences
+          )
+        : null,
+    [on, sessions, households, absences]
+  );
+  return { on, tabs, open, setOpen: setOpen ?? noop, shown, keyOf, headcounts };
 }
 
 const ROW_CLASS = '-mx-6 px-6 mb-6';
@@ -173,6 +214,8 @@ export function SessionTabRow<C>({
     >
       {tabs.tabs.map((t) => {
         const isOpen = t.key === tabs.open;
+        // [[GTC-481]] D: the date, then the session's headcount ("Thu 25 Dec · 14 coming").
+        const line = tabDateLine(t.date, tabs.headcounts?.[t.key]);
         return (
           <button
             key={t.key}
@@ -187,11 +230,11 @@ export function SessionTabRow<C>({
             }`}
           >
             <span className="block whitespace-nowrap font-medium">{tabLabel(t.name, t.count)}</span>
-            {t.date && (
+            {line && (
               <span
                 className={`block whitespace-nowrap text-xs ${isOpen ? 'text-white/80' : 'text-gray-500'}`}
               >
-                {t.date}
+                {line}
               </span>
             )}
           </button>
@@ -247,4 +290,74 @@ export function SessionPicker({ choice }: { choice: SessionChoice }) {
       </select>
     </div>
   );
+}
+
+/**
+ * [[GTC-481]] C (the founder's ruling 3 on the plan, 25 Nov 2026): Moment 3's warning before a
+ * session's dish goes to someone marked as not at that session. `isAway` reads the plan's marks (none
+ * while the switch is off, so it is always false there); `ask` opens the box and answers true for
+ * "Give anyway", false for "Pick someone else". `element` is drawn once by the view; it is nothing
+ * until a warning is open.
+ */
+export function useAwayWarning() {
+  const plan = useContext(SessionPlanContext);
+  const id = useId();
+  const [pending, setPending] = useState<{ words: string; answer: (go: boolean) => void } | null>(
+    null
+  );
+  const absences = plan?.absences ?? NO_MARKS.absences;
+  const sessions = plan?.sessions ?? NO_SESSIONS;
+  const isAway = useCallback(
+    (personEventId: string | undefined, dayId: string | null | undefined) =>
+      !!personEventId &&
+      !!dayId &&
+      absences.some((a) => a.personEventId === personEventId && a.dayId === dayId),
+    [absences]
+  );
+  const ask = useCallback(
+    (person: string, dish: string, dayId: string) =>
+      new Promise<boolean>((answer) =>
+        setPending({
+          words: AWAY_WORDS.warning(person, dish, sessions.find((s) => s.id === dayId)?.name ?? ''),
+          answer,
+        })
+      ),
+    [sessions]
+  );
+  const close = (go: boolean) => {
+    pending?.answer(go);
+    setPending(null);
+  };
+  const element = pending ? (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/30 p-4">
+      <div
+        role="alertdialog"
+        aria-modal="true"
+        aria-labelledby={id}
+        data-away-warning=""
+        className="w-full max-w-sm rounded-lg bg-white p-5 shadow-lg"
+      >
+        <p id={id} className="text-sm text-gray-900">
+          {pending.words}
+        </p>
+        <div className="mt-4 flex flex-wrap items-center justify-end gap-3">
+          <button
+            type="button"
+            onClick={() => close(false)}
+            className="min-h-[44px] px-3 text-sm text-gray-600 hover:text-gray-900"
+          >
+            {AWAY_WORDS.pickSomeoneElse}
+          </button>
+          <button
+            type="button"
+            onClick={() => close(true)}
+            className="min-h-[44px] rounded-lg bg-accent px-4 text-sm font-medium text-white hover:bg-accent-dark"
+          >
+            {AWAY_WORDS.giveAnyway}
+          </button>
+        </div>
+      </div>
+    </div>
+  ) : null;
+  return { isAway, ask, element };
 }
