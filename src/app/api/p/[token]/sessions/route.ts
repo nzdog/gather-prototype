@@ -32,7 +32,6 @@ type Ctx = { params: Promise<{ token: string }> };
  * (`resolveCarriedSubjects`) is not used here.
  */
 const closed = () => new NextResponse(null, { status: 404 });
-const refused = () => NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
 const notFound = () => NextResponse.json({ error: 'Not found' }, { status: 404 });
 
 /**
@@ -80,7 +79,9 @@ export async function GET(_request: NextRequest, context: Ctx) {
   if (!isSessionsOn()) return closed();
   const { token } = await context.params;
   const resolved = await resolveToken(token);
-  if (!resolved || resolved.scope !== 'PARTICIPANT') return refused();
+  if (!resolved || resolved.scope !== 'PARTICIPANT') {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+  }
 
   try {
     const place = await placeOf(resolved.person.id, resolved.event.id);
@@ -112,7 +113,9 @@ export async function PUT(request: NextRequest, context: Ctx) {
   if (!isSessionsOn()) return closed();
   const { token } = await context.params;
   const resolved = await resolveToken(token);
-  if (!resolved || resolved.scope !== 'PARTICIPANT') return refused();
+  if (!resolved || resolved.scope !== 'PARTICIPANT') {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 403 });
+  }
 
   const eventId = resolved.event.id;
   const me = resolved.person.id;
