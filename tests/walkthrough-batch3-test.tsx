@@ -466,10 +466,12 @@ async function runInMemory() {
   // session route, `days/[dayId]/route.ts`.
   // ⚠ 114 → 115 AT [[GTC-479]] (24 Nov 2026, the founder's ruling 2 on its plan: "the older pins you
   // listed, each the narrowest move with a dated note"): the sessions route, `events/[id]/sessions/route.ts`.
+  // ⚠ 115 → 116 AT [[GTC-481]] (25 Nov 2026, the founder's ruling 6 on its plan: "every pin move listed,
+  // each the narrowest way with a dated note"): the guest's sessions route, `p/[token]/sessions/route.ts`.
   assert(
     '4',
-    '4k CONTROL: no new API route — src/app/api still has 115 route.ts (the share route, GTC-472, the session route, GTC-478, and the sessions route, GTC-479, are the ones added)',
-    routes(join(process.cwd(), 'src/app/api')) === 115
+    '4k CONTROL: no new API route — src/app/api still has 116 route.ts (the share route, GTC-472, the session route, GTC-478, the sessions route, GTC-479, and the guest’s sessions route, GTC-481, are the ones added)',
+    routes(join(process.cwd(), 'src/app/api')) === 116
   );
   assert(
     '4',

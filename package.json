@@ -221,7 +221,8 @@
     "test:sessions-foundation": "tsx tests/sessions-foundation-test.ts",
     "test:sessions-moment1": "tsx --tsconfig tests/tsconfig.json tests/sessions-moment1-test.tsx",
     "test:sessions-moments-2-3": "tsx --tsconfig tests/tsconfig.json tests/sessions-moments-2-3-test.tsx",
-    "test:sessions-guests-clock": "tsx --tsconfig tests/tsconfig.json tests/sessions-guests-clock-test.tsx"
+    "test:sessions-guests-clock": "tsx --tsconfig tests/tsconfig.json tests/sessions-guests-clock-test.tsx",
+    "test:sessions-guest-answers": "tsx --tsconfig tests/tsconfig.json tests/sessions-guest-answers-test.tsx"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

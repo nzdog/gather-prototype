@@ -261,6 +261,42 @@ const GTC485_GUEST_PAIRS: Pairs = [
   ],
 ];
 /**
+ * ⚠ [[GTC-481]] (25 Nov 2026, the founder's ruling 6 on its plan: "the guest page's two pieces, the
+ * layout, and every pin move listed, each the narrowest way with a dated note"). The guest page gains
+ * exactly these two pieces for A, the guest's sessions card (one import; one placement, which draws
+ * nothing while the sessions switch is off). Each is named here in full and must be found exactly
+ * once; the base with its older pieces and these must equal the file byte for byte. Any other edit,
+ * and either of them missing, repeated or changed, still turns this check red.
+ */
+const GTC481_PAIRS: Pairs = [
+  [
+    "import { askHostLine } from '@/lib/guest/questions-line';\n",
+    "import { askHostLine } from '@/lib/guest/questions-line';\n" +
+      "import GuestSessions from '@/components/sessions/GuestSessions';\n",
+  ],
+  [
+    '          {/* GTC-191 (a) and (b) — TWO SECTIONS, NEVER INTERLEAVED, AND HERS FIRST.\n',
+    "          {/* [[GTC-481]] A: the sessions the guest is down for, and a way to say they can't\n" +
+      '              make one. It draws nothing while the sessions switch is off, or with fewer than two\n' +
+      '              sessions. */}\n' +
+      '          <GuestSessions\n' +
+      '            token={token}\n' +
+      '            attendance={data.attendance}\n' +
+      '            assignments={data.assignments}\n' +
+      '            onChanged={fetchData}\n' +
+      '          />\n' +
+      '\n' +
+      '          {/* GTC-191 (a) and (b) — TWO SECTIONS, NEVER INTERLEAVED, AND HERS FIRST.\n',
+  ],
+];
+/**
+ * ⚠ [[GTC-481]] (25 Nov 2026, the founder's ruling 6): the guest page's one new import, the
+ * sessions card. The page's imports are the base's plus exactly this line, once; nothing else.
+ */
+const GTC481_IMPORT = "import GuestSessions from '@/components/sessions/GuestSessions';";
+const importsAsBase = (now: string, base: string) =>
+  count(now, GTC481_IMPORT) === 1 && now.replace(`\n${GTC481_IMPORT}`, '') === base;
+/**
  * ⚠ [[GTC-485]] (25 Nov 2026, the founder's final word on its plan, item 4: "The hunks, the moved
  * pins and the new suite as planned"). The pre-flight gains exactly this one insertion for G, the
  * event's last day in the draft first line's facts (sent only while the sessions switch is on).
@@ -335,7 +371,8 @@ export const CHECKS = {
       !!m &&
       m[1].trim() === w48 &&
       base.length > 1000 &&
-      imports(now) === imports(base)
+      // [[GTC-481]]: the imports are 5f64ce6's plus exactly the sessions card's one line.
+      importsAsBase(imports(now), imports(base))
     );
   },
   /** L1 — the link: one `<a>`, to the board, in W42's words. */
@@ -476,7 +513,9 @@ export const CHECKS = {
   /** G1 — the guest page is 5f64ce6's with exactly GTC-444's pieces, byte for byte. */
   guestPage(now: string, base: string) {
     const exact =
-      base.length > 1000 ? applyPairs(base, [...GUEST_PAIRS, ...GTC485_GUEST_PAIRS]) : null;
+      base.length > 1000
+        ? applyPairs(base, [...GUEST_PAIRS, ...GTC485_GUEST_PAIRS, ...GTC481_PAIRS])
+        : null;
     return exact !== null && now === exact;
   },
   /** A4 — the copy's board: W43, Host view to itself, Guest view to Aroha's page, W46 naming her. */
@@ -802,7 +841,7 @@ async function main() {
   );
   assert(
     'W',
-    'W2 O7: the guest page’s W48 is inline, in the helper’s W48 words, linking to the board; its imports are 5f64ce6’s',
+    'W2 O7: the guest page’s W48 is inline, in the helper’s W48 words, linking to the board; its imports are 5f64ce6’s (from GTC-481, with the sessions card’s one line)',
     CHECKS.inlineW48(read(GUEST), atRef(PARENT, GUEST), words?.BACK_TO_BOARD ?? null)
   );
 

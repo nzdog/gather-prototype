@@ -228,7 +228,7 @@ const PROTECTED: Entry[] = [
     path: 'tests/security-*',
     why: 'the security suite, its fixtures, its inventory gate and its route scan',
     ruled:
-      "GTC-442: suite 11 on the copy shape; the scan pins for the sixth cron route; GTC-472: the scan's counts for the share route",
+      "GTC-442: suite 11 on the copy shape; the scan pins for the sixth cron route; GTC-472: the scan's counts for the share route; GTC-481: Suite 23 and the scan's counts for the guest's sessions route",
     plus: [
       {
         // ⚠ HASH MOVED AT [[GTC-477]] (23 Nov 2026, the founder's ruling 2 on its plan: "The security suite
@@ -243,8 +243,12 @@ const PROTECTED: Entry[] = [
         // (security 280 to 294), and the older pins you listed, each the narrowest move with a dated
         // note"): Suite 22, who comes to which session, 14 checks, and its one call in main(); no
         // existing check changed. The 71cccc48... it replaced was the text at 3d74d6d.
+        // ⚠ HASH MOVED AGAIN AT [[GTC-481]] (25 Nov 2026, the founder's ruling 6 on its plan: "Suite 23
+        // (security 294 to 309, none weakened) ... and every pin move listed, each the narrowest way
+        // with a dated note"): Suite 23, the guest's own sessions, 15 checks, and its one call in
+        // main(); no existing line changed. The bcb8299c... it replaced was the text at 6e84218.
         file: 'tests/security-validation.ts',
-        sha256: 'bcb8299c0c93540aa49c016b739b3fdbf321c0793782ea74b818782ae80dcad5',
+        sha256: '728d0dd1a389a79168211560dd9dc01211f50049e2315977dad288e93a77123c',
         edited: true,
       },
       {
@@ -260,8 +264,11 @@ const PROTECTED: Entry[] = [
         // ⚠ HASH MOVED AGAIN AT [[GTC-479]] (24 Nov 2026, the founder's ruling 2 on its plan): the counts
         // 115 files, 151 handlers and 89 entries, their dated notes, and nothing else. The fa277a97...
         // it replaced was the text at 3d74d6d.
+        // ⚠ HASH MOVED AGAIN AT [[GTC-481]] (25 Nov 2026, the founder's ruling 6 on its plan): the counts
+        // 116 files, 153 handlers and 90 entries, their dated notes, and nothing else. The 964b84f2...
+        // it replaced was the text at 6e84218.
         file: 'tests/security-route-scan-control.ts',
-        sha256: '964b84f2678fcbabba864bec9afbb547c88670c7b5d2369febcc54cc5a34616f',
+        sha256: 'b9e97dffec589a4f8f768f1a3fd81fed57296b08de7a5797d8f59d44e22db7c3',
         edited: true,
       },
     ],
@@ -398,7 +405,7 @@ const PROTECTED: Entry[] = [
     path: 'route-classifications.json',
     why: 'every route and how it is guarded, as the security suite reads it',
     ruled:
-      'GTC-442: the tokens route out, the demo clean-up in; GTC-472: the share route in; GTC-478: the days entry corrected, the session route in; GTC-479: the sessions route in',
+      'GTC-442: the tokens route out, the demo clean-up in; GTC-472: the share route in; GTC-478: the days entry corrected, the session route in; GTC-479: the sessions route in; GTC-481: the guest sessions route in',
     plus: [
       {
         // ⚠ HASH MOVED AT [[GTC-472]] (22 Nov 2026, founder ruling D2 A: "one new entry in
@@ -412,8 +419,12 @@ const PROTECTED: Entry[] = [
         // ⚠ HASH MOVED AT [[GTC-479]] (24 Nov 2026, the founder's ruling 2 on its plan: "the new
         // sessions route"): one new entry for /api/events/:id/sessions (GET, PUT, SESSION,
         // requireEventRole), and nothing else. The 5f11f2c9... it replaced was the text at 3d74d6d.
+        // ⚠ HASH MOVED AT [[GTC-481]] (25 Nov 2026, the founder's ruling 6 on its plan: "the new address
+        // /api/p/:token/sessions and its route-classifications entry (TOKEN)"): one new entry for
+        // /api/p/:token/sessions (GET, PUT, TOKEN, resolveToken), and nothing else. The 0f592515... it
+        // replaced was the text at 6e84218.
         file: 'route-classifications.json',
-        sha256: '0f5925152ef74e7221a125c63e924f1b4e97e31fbc8e0e54551c9bf11b55cb4c',
+        sha256: 'bf5d39ab2f08ee8f0a4943f8e5e0f731a0394efeb2acc8c0a837174c7137f773',
         edited: true,
       },
     ],

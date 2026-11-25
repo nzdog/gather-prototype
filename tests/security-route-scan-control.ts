@@ -448,16 +448,22 @@ function suite1_HeadShape(head: ScanResult) {
    * file, `events/[id]/sessions`, with a `GET` and a `PUT`, both behind `requireEventRole(HOST,
    * COHOST)`, after the sessions switch. ✅ THE GUARD COUNT DID NOT MOVE. Counts only; every other
    * assertion in this suite is as it was.
+   *
+   * ⚠ 115 → 116 FILES AND 151 → 153 HANDLERS AT [[GTC-481]] (25 Nov 2026, the founder's ruling 6 on
+   * its plan: "every pin move listed, each the narrowest way with a dated note") — one new route
+   * file, `p/[token]/sessions`, with a `GET` and a `PUT`, each reading the guest's link through
+   * `resolveToken` and refusing all but a PARTICIPANT link, after the sessions switch. ✅ THE GUARD
+   * COUNT DID NOT MOVE. Counts only; every other assertion in this suite is as it was.
    */
   logTest(
-    'the scanner discovers exactly 115 route files under src/app/api',
-    head.files.length === 115,
+    'the scanner discovers exactly 116 route files under src/app/api',
+    head.files.length === 116,
     `found ${head.files.length}`
   );
 
   logTest(
-    'the scanner enumerates exactly 151 exported HTTP handlers',
-    head.handlers.length === 151,
+    'the scanner enumerates exactly 153 exported HTTP handlers',
+    head.handlers.length === 153,
     `found ${head.handlers.length}`
   );
 
@@ -495,9 +501,10 @@ function suite1_HeadShape(head: ScanResult) {
   // ⚠ 113/145 → 114/149 and 87 → 88 at [[GTC-478]]: the session route `days/[dayId]`, SESSION (and
   // the `days` entry corrected from NONE to SESSION, which it has been since GTC-267).
   // ⚠ 114/149 → 115/151 and 88 → 89 at [[GTC-479]] (24 Nov 2026): the sessions route, SESSION.
+  // ⚠ 115/151 → 116/153 and 89 → 90 at [[GTC-481]] (25 Nov 2026): the guest's sessions route, TOKEN.
   logTest(
-    'the surface is larger than the retired inventory could express (89 entries)',
-    head.files.length === 115 && head.handlers.length === 151,
+    'the surface is larger than the retired inventory could express (90 entries)',
+    head.files.length === 116 && head.handlers.length === 153,
     `files ${head.files.length}, handlers ${head.handlers.length}`
   );
 }
