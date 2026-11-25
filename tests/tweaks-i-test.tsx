@@ -133,6 +133,41 @@ const GTC444_PAIRS: Pairs = [
       '          )}\n',
   ],
 ];
+/**
+ * ⚠ [[GTC-485]] (25 Nov 2026, the founder's final word on its plan, item 4: "The hunks, the moved
+ * pins and the new suite as planned"). The guest page gains exactly these four pieces for E, a
+ * dish's session with its date (the guest route sends `label` only while the sessions switch is
+ * on). Each is named here in full and must be found exactly once; the base with its older pieces
+ * and these must equal the file byte for byte. Any other edit, and any of them missing, repeated or
+ * changed, still turns P1 red. Nothing else in this file moves.
+ */
+const GTC485_PAIRS: Pairs = [
+  [
+    '      day: { id: string; name: string } | null;\n',
+    "      // [[GTC-485]] E: the session's name and date, sent only while the sessions switch is on.\n" +
+      '      day: { id: string; name: string; label?: string } | null;\n',
+  ],
+  [
+    '      name: string;\n' + '      date: string;\n' + '    } | null;\n',
+    '      name: string;\n' +
+      '      date: string;\n' +
+      "      // [[GTC-485]] E: the session's name and date, sent only while the sessions switch is on.\n" +
+      '      label?: string;\n' +
+      '    } | null;\n',
+  ],
+  [
+    '                        <span className="text-gray-400 text-xs">({a.item.day.name})</span>\n',
+    '                        <span className="text-gray-400 text-xs">\n' +
+      '                          ({a.item.day.label ?? a.item.day.name})\n' +
+      '                        </span>\n',
+  ],
+  [
+    '                  <span className="text-gray-900">{assignment.item.day.name}</span>\n',
+    '                  <span className="text-gray-900">\n' +
+      '                    {assignment.item.day.label ?? assignment.item.day.name}\n' +
+      '                  </span>\n',
+  ],
+];
 
 // ── Files and commits ────────────────────────────────────────────────────────
 const PAGE = 'src/app/p/[token]/page.tsx';
@@ -740,7 +775,8 @@ const answeredBox = (html: string) =>
 export const CHECKS = {
   /** P1 — the page is the base with exactly Ticket I's pieces, byte for byte. */
   exactly(now: string, base: string) {
-    const expected = base.length > 1000 ? applyPairs(base, [...I_PAIRS, ...GTC444_PAIRS]) : null;
+    const expected =
+      base.length > 1000 ? applyPairs(base, [...I_PAIRS, ...GTC444_PAIRS, ...GTC485_PAIRS]) : null;
     return expected !== null && now === expected;
   },
   /** P2 — the read and the two answer calls as before, byte for byte; the imports as before. */

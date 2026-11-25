@@ -85,6 +85,12 @@ export interface AskEventFacts {
   startDate: Date;
   venueName: string | null;
   occasionDescription: string | null;
+  /**
+   * [[GTC-485]] G: the event's last day, given only while the sessions switch is on and the
+   * event's first and last days are different NZ dates (`readAskPreview`). Absent, the draft names
+   * the first day alone, as before.
+   */
+  endDate?: Date;
 }
 
 /**
@@ -215,9 +221,13 @@ export function formatEventDay(startDate: Date): string {
 export function draftAuthorLine(event: AskEventFacts): string {
   const where = event.venueName?.trim() ? `, at ${event.venueName.trim()}` : '';
   const occasion = event.occasionDescription?.trim();
+  // [[GTC-485]] G: an event over more than one date names its first and last days.
+  const first = formatEventDay(event.startDate);
+  const last = event.endDate ? formatEventDay(event.endDate) : first;
+  const when = last === first ? `on ${first}` : `from ${first} to ${last}`;
 
   return [
-    `We're doing ${event.name} on ${formatEventDay(event.startDate)}${where}.`,
+    `We're doing ${event.name} ${when}${where}.`,
     occasion ? `${occasion}` : null,
     `Would love to have you there.`,
   ]

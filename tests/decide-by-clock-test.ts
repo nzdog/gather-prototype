@@ -284,11 +284,15 @@ assert(
 );
 
 const lifecycle = read('src/lib/lifecycle.ts');
+// ⚠ [[GTC-485]] (24 Nov 2026, the founder's ruling 5 at GTC-480 and his final word at
+// GTC-485's plan): neededBy() gained one branch, a dish's session while the sessions switch
+// is on, so it is no longer byte-identical. Moved the narrowest way: the function still ends
+// with its old line, word for word, as the fall-back, and still names no offset.
+const neededByFn = /export function neededBy\([\s\S]*?\n\}\n/.exec(lifecycle)?.[0] ?? '';
 assert(
-  'neededBy() is byte-identical — D2 consumes the anchor, it does not bake an offset in',
-  /export function neededBy\(item: \{ dropOffAt: Date \| null \}, event: LifecycleEvent\): Date \{\n  return item\.dropOffAt \?\? event\.endDate;\n\}/.test(
-    lifecycle
-  ),
+  'neededBy() keeps its old line as the fall-back and holds no offset — D2 consumes the anchor, it does not bake an offset in',
+  neededByFn.endsWith('\n  return item.dropOffAt ?? event.endDate;\n}\n') &&
+    !/offset|hour|\*\s*60\b|3_?600|86_?400/i.test(neededByFn),
   'the offset must be applied at D2 derivation time, never inside neededBy()'
 );
 assert(

@@ -1519,6 +1519,9 @@ function MessageStep({
         ? {
             name: data.event.name,
             startDate: new Date(data.event.startDate),
+            // [[GTC-485]] G: the last day, only while the sessions switch is on and the event spans
+            // more than one date (a string on the wire, as the first day is).
+            ...(data.event.endDate ? { endDate: new Date(data.event.endDate) } : {}),
             venueName: data.event.venueName,
             occasionDescription: data.event.occasionDescription,
           }

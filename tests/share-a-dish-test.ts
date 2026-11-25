@@ -1861,9 +1861,35 @@ async function main() {
       git(['cat-file', '-e', `${GTC478_AT}^{commit}`]).status === 0 &&
       GTC478_PATHS.every((f) => FORBIDDEN.includes(f)) &&
       git(['diff', '--quiet', GTC472_BASE, GTC478_AT, '--', ...GTC478_PATHS]).status === 0;
+    // ⚠ AND ELEVEN FILES ASKED AT A FIXED COMMIT SINCE [[GTC-485]] (25 Nov 2026, the founder's final
+    // word on its plan, item 4: "The hunks, the moved pins and the new suite as planned"). GTC-485
+    // edits them on purpose (a dish's deadline from its session, its tag on the board, the
+    // invitation's date range; the two sms files one select line each, ruling 5). They are taken out
+    // of the live list by exact name, and must be unchanged from this base to 8454fed, GTC-485's
+    // base. Their bytes are held by test:sessions-guests-clock (8454fed plus exactly the named
+    // hunks) and the two sms files also by test:tweaks-guard. Everything else on J2 stays live.
+    const GTC485_AT = '8454fed';
+    const GTC485_FILES = [
+      'src/lib/decide-by.ts',
+      'src/lib/sms/decide-by-eligibility.ts',
+      'src/lib/sms/decide-by-sender.ts',
+      'src/lib/messages/ask-register.ts',
+      'src/lib/preflight/ask-preview.ts',
+      'src/lib/preflight/ask-preview-compose.ts',
+      'src/lib/glance/read.ts',
+      'src/lib/glance/rewind.ts',
+      'src/lib/glance/state.ts',
+      'src/components/glance/reading.ts',
+      'src/components/glance/GlancePersonReading.tsx',
+    ];
+    const gtc485Ok =
+      git(['cat-file', '-e', `${GTC485_AT}^{commit}`]).status === 0 &&
+      git(['diff', '--quiet', GTC472_BASE, GTC485_AT, '--', ...GTC485_FILES]).status === 0;
     const changed = git(['diff', '--name-only', GTC472_BASE, '--', ...FORBIDDEN])
       .stdout.split('\n')
-      .filter((f) => f !== '' && !GTC477_FILES.includes(f) && !isGtc478(f))
+      .filter(
+        (f) => f !== '' && !GTC477_FILES.includes(f) && !isGtc478(f) && !GTC485_FILES.includes(f)
+      )
       .join('\n');
     const untracked = git([
       'ls-files',
@@ -1875,7 +1901,7 @@ async function main() {
     assert('J1 the base commit is in this checkout, so the checks below mean something', baseOk);
     assert(
       'J2 nothing under the send, the nudges, the decide-by clock, the board, the assign and items routes, the ledger, auth, Stripe or the schema is changed or added',
-      baseOk && gtc477Ok && gtc478Ok && changed === '' && untracked === '',
+      baseOk && gtc477Ok && gtc478Ok && gtc485Ok && changed === '' && untracked === '',
       `${changed} ${untracked}`
     );
     const files = git(['diff', '--name-only', GTC472_BASE, GTC478_AT])

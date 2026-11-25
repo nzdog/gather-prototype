@@ -33,6 +33,7 @@ import {
   EMAIL_BLOCKED_TEXT_FAILED_WORDS,
 } from '@/lib/eligibility/email-block-words';
 import type { Prisma } from '@prisma/client';
+import { isSessionsOn } from '@/lib/sessions/switch';
 import {
   decideByAtFor,
   derivePersonState,
@@ -119,6 +120,10 @@ const ASSIGNMENT_SELECT = {
       quantityUnitCustom: true,
       dropOffAt: true,
       decideByOffsetHours: true,
+      // [[GTC-485]] D and F: the dish's session, for its decide-by clock and the reading list's tag.
+      // It reaches a colour only through the clock, and the tag is drawn only while the sessions
+      // switch is on.
+      day: { select: { name: true, date: true } },
     },
   },
 } satisfies Prisma.AssignmentSelect;
@@ -278,7 +283,13 @@ export async function readEventGlance(
       quantityAmount: a.item.quantityAmount,
       quantityUnit: a.item.quantityUnit,
       quantityUnitCustom: a.item.quantityUnitCustom,
-      item: { dropOffAt: a.item.dropOffAt, decideByOffsetHours: a.item.decideByOffsetHours },
+      item: {
+        dropOffAt: a.item.dropOffAt,
+        decideByOffsetHours: a.item.decideByOffsetHours,
+        day: a.item.day,
+      },
+      // [[GTC-485]] F: the session's tag while the sessions switch is on; none for the whole event.
+      ...(isSessionsOn() && a.item.day?.name.trim() ? { session: a.item.day.name.trim() } : {}),
     });
     heldBy.set(a.personId, held);
   }
@@ -429,6 +440,7 @@ export async function readEventGlance(
           state: derived.state,
           reason: derived.reason,
           decideByAt: decideByAtFor(i.response, i.item, glanceEvent),
+          ...(i.session ? { session: i.session } : {}),
         };
       }),
       ...emailFacts,

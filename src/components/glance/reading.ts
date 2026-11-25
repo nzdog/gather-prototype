@@ -41,6 +41,11 @@ export interface ReadingRow {
   /** Already formatted. A number and a unit never reach the panel as separate facts. */
   quantity: string | null;
   critical: boolean;
+  /**
+   * [[GTC-485]] F: the dish's session tag, only when it has one (the sessions switch on). The
+   * plan's own session name, never a time anything happened.
+   */
+  session?: string;
 }
 
 export interface ReadingPanel {
@@ -286,6 +291,7 @@ export function readingRowsOf(items: readonly GlanceItem[]): ReadingRow[] {
     name: row.name,
     quantity: quantityLabel(row),
     critical: row.critical,
+    ...(row.session ? { session: row.session } : {}),
   }));
 }
 

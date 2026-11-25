@@ -281,6 +281,12 @@ function main() {
     // host's create. tests/tweaks-guard-test.ts pins that file's whole text by hash too.
     const NAMED: Record<string, string[]> = {
       Z10: ['tests/security-route-scan-control.ts', 'tests/security-validation.ts'],
+      // ⚠ [[GTC-485]] (25 Nov 2026, the founder's final word on its plan, item 1: "contacts-untouched
+      // Z7 naming those two files out by exact path, every other file in src/lib/sms still frozen"):
+      // the decide-by finder and sender each load the dish's session date, one select each.
+      // tests/tweaks-guard-test.ts pins both files whole, the finder as 21a9577 plus that one line,
+      // the sender by hash.
+      Z7: ['src/lib/sms/decide-by-eligibility.ts', 'src/lib/sms/decide-by-sender.ts'],
     };
     // ⚠ Z9 ASKED FROM THE BASE TO c686175 SINCE [[GTC-478]] (the founder's ruling 2 on its plan; see
     // GTC478_FROZEN above): GTC-478's migration is in prisma/ on purpose. Every other zone reads the

@@ -37,6 +37,8 @@
  */
 
 import type { EventStatus } from '@prisma/client';
+import { sessionDateKey } from './sessions/dates';
+import { isSessionsOn } from './sessions/switch';
 
 export type EventPhase = 'DRAFT' | 'CONFIRMING' | 'SENT' | 'COMPLETE';
 
@@ -192,8 +194,21 @@ export function getEventPhase(event: LifecycleEvent, now: Date = new Date()): Ev
  * The offset constant that turns needed-by into those two clocks is deliberately NOT
  * here: §10.2 defers it to ticket time with founder sign-off (GTC-180 / E3). This
  * function supplies only the anchor both clocks share.
+ *
+ * [[GTC-485]] (Q8; the founder's ruling 5 at GTC-480): while the sessions switch is on, a dish
+ * with a session and no drop-off time is needed by its session's date, at the instant a form-made
+ * event's last day is stored as (00:00 UTC on that NZ date: 1pm NZ, noon in winter), never later
+ * than the event's own end. The date is read by GTC-479's rule (`sessionDateKey`). Off, or no
+ * session: the old line, word for word.
  */
-export function neededBy(item: { dropOffAt: Date | null }, event: LifecycleEvent): Date {
+export function neededBy(
+  item: { dropOffAt: Date | null; day?: { date: Date } | null },
+  event: LifecycleEvent
+): Date {
+  if (item.dropOffAt === null && item.day && isSessionsOn()) {
+    const at = new Date(`${sessionDateKey(item.day.date)}T00:00:00.000Z`);
+    return at.getTime() < event.endDate.getTime() ? at : event.endDate;
+  }
   return item.dropOffAt ?? event.endDate;
 }
 
@@ -205,7 +220,8 @@ export function neededBy(item: { dropOffAt: Date | null }, event: LifecycleEvent
  * FROZEN divergence started. These adapters exist so there is ONE definition of sent
  * and complete, not a server one and a client one that drift.
  *
- * This module stays client-safe: its only import is a type, which erases at build.
+ * This module stays client-safe: its imports are a type, which erases at build, and ([[GTC-485]])
+ * the sessions date helper and switch, which import nothing.
  */
 export interface SerialisedEvent {
   status: string;

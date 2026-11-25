@@ -217,7 +217,9 @@ export async function rewindGlanceInputs(
       // does not record as having changed. A decision, not behaviour — the same value
       // `responseAt` already carries, read from the row instead of from the ledger.
       response: true,
-      item: { select: { dropOffAt: true, decideByOffsetHours: true } },
+      item: {
+        select: { dropOffAt: true, decideByOffsetHours: true, day: { select: { date: true } } },
+      },
     },
   });
 
@@ -279,6 +281,7 @@ export async function rewindGlanceInputs(
     clockAt.set(a.id, {
       dropOffAt: a.item.dropOffAt,
       decideByOffsetHours: a.item.decideByOffsetHours,
+      day: a.item.day,
     });
     if (a.createdAt.getTime() > sinceMs) {
       absentAt.add(a.id);

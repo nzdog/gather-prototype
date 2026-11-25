@@ -180,6 +180,38 @@ export const PAGE_PAIRS: Pairs = [
       '        )}\n',
   ],
 ];
+/**
+ * ⚠ [[GTC-485]] (25 Nov 2026, the founder's final word on its plan, item 4: "The hunks, the moved
+ * pins and the new suite as planned"). The board page gains exactly these three pieces for D,
+ * "Answers by" counted from each row's session (the rows are read only while the sessions switch is
+ * on). Each is named here in full and must be found exactly once; the base with its older pieces
+ * and these must equal the file byte for byte. Any other edit, and any of them missing, repeated or
+ * changed, still turns B4 red. Nothing else in this file moves.
+ */
+const GTC485_PAGE_PAIRS: Pairs = [
+  [
+    "import GuestRepliesButton from '@/components/demo/GuestRepliesButton';\n",
+    "import GuestRepliesButton from '@/components/demo/GuestRepliesButton';\n" +
+      "import { isSessionsOn } from '@/lib/sessions/switch';\n",
+  ],
+  [
+    '  const sample = await readSampleBoardView(prisma, eventId, now);\n',
+    '  const sample = await readSampleBoardView(prisma, eventId, now);\n' +
+      '\n' +
+      '  // [[GTC-485]] D: while the sessions switch is on, "Answers by" counts each of the plan\'s rows\n' +
+      "  // from its own session (a whole-event row from the event's last day). Off: nothing is read here.\n" +
+      '  const sessionRows = isSessionsOn()\n' +
+      '    ? await prisma.item.findMany({\n' +
+      '        where: { team: { eventId } },\n' +
+      '        select: { day: { select: { date: true } } },\n' +
+      '      })\n' +
+      '    : undefined;\n',
+  ],
+  [
+    '        answersBy={answersByDay(event, now)}\n',
+    '        answersBy={answersByDay(event, now, sessionRows)}\n',
+  ],
+];
 
 export interface Words {
   BUTTON: string;
@@ -371,7 +403,7 @@ export const CHECKS = {
     toggle: string,
     parentToggle: string
   ): boolean {
-    const want = applyPairs(parentPage, PAGE_PAIRS);
+    const want = applyPairs(parentPage, [...PAGE_PAIRS, ...GTC485_PAGE_PAIRS]);
     return (
       want !== null &&
       page === want &&

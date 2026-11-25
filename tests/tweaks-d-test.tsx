@@ -239,6 +239,24 @@ export const GTC444_PAGE_EDITS: Edit[] = [
       '          {pretend && <SampleBoardLink eventId={eventId} />}\n',
   },
 ];
+/**
+ * ⚠ [[GTC-485]] (25 Nov 2026, the founder's final word on its plan, item 4: "The hunks, the moved
+ * pins and the new suite as planned"). The pre-flight gains exactly this one insertion for G, the
+ * event's last day in the draft first line's facts (sent only while the sessions switch is on).
+ * Each is named here in full and must be found exactly once; the base with its older pieces and
+ * these must equal the file byte for byte. Any other edit, and any of them missing, repeated or
+ * changed, still turns P1 red. Nothing else in this file moves.
+ */
+const GTC485_PAGE_EDITS: Edit[] = [
+  {
+    old: '            startDate: new Date(data.event.startDate),\n',
+    new:
+      '            startDate: new Date(data.event.startDate),\n' +
+      '            // [[GTC-485]] G: the last day, only while the sessions switch is on and the event spans\n' +
+      '            // more than one date (a string on the wire, as the first day is).\n' +
+      '            ...(data.event.endDate ? { endDate: new Date(data.event.endDate) } : {}),\n',
+  },
+];
 export const STEP_EDITS: Edit[] = [
   {
     old: " * ticked. Ready and the settled steps have only the row's.\n */\n",
@@ -703,7 +721,7 @@ function layerP() {
   assert(
     'P',
     'P1 the page is the base with exactly the four typed changes, byte for byte: the five-step `every` becomes 1 to 4, the line never names step 5, Ready gains noBox, "five" becomes "four" in Send’s words; and GTC-444’s two lines, the board link’s import and its line after the pretend panel',
-    CHECKS.exactly(page, pageBase, [...PAGE_EDITS, ...GTC444_PAGE_EDITS])
+    CHECKS.exactly(page, pageBase, [...PAGE_EDITS, ...GTC444_PAGE_EDITS, ...GTC485_PAGE_EDITS])
   );
   assert(
     'P',

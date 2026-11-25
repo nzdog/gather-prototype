@@ -59,7 +59,9 @@ export async function readReplyFacts(
         personId: true,
         response: true,
         decideByFollowupSentAt: true,
-        item: { select: { dropOffAt: true, decideByOffsetHours: true } },
+        item: {
+          select: { dropOffAt: true, decideByOffsetHours: true, day: { select: { date: true } } },
+        },
       },
     }),
   ]);

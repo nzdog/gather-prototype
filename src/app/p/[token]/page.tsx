@@ -31,7 +31,8 @@ interface HostPreviewData {
       name: string;
       quantity: string | null;
       critical: boolean;
-      day: { id: string; name: string } | null;
+      // [[GTC-485]] E: the session's name and date, sent only while the sessions switch is on.
+      day: { id: string; name: string; label?: string } | null;
     };
   }[];
 }
@@ -56,6 +57,8 @@ interface Assignment {
       id: string;
       name: string;
       date: string;
+      // [[GTC-485]] E: the session's name and date, sent only while the sessions switch is on.
+      label?: string;
     } | null;
   };
 }
@@ -361,7 +364,9 @@ export default function ParticipantView() {
                         </span>
                       )}
                       {a.item.day && (
-                        <span className="text-gray-400 text-xs">({a.item.day.name})</span>
+                        <span className="text-gray-400 text-xs">
+                          ({a.item.day.label ?? a.item.day.name})
+                        </span>
                       )}
                     </li>
                   ))}
@@ -810,7 +815,9 @@ function AssignmentCard({
               {assignment.item.day && (
                 <div className="flex items-center gap-3">
                   <Calendar className="size-5 text-gray-400" />
-                  <span className="text-gray-900">{assignment.item.day.name}</span>
+                  <span className="text-gray-900">
+                    {assignment.item.day.label ?? assignment.item.day.name}
+                  </span>
                 </div>
               )}
               {ownDropOff ? (
