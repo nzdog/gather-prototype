@@ -29,7 +29,8 @@ function sessionOfEvent(dayId: string, eventId: string) {
 /**
  * [[GTC-478]] (B): rename a session (`name`), change its date (`date`, YYYY-MM-DD), or both. A
  * session moved to another date goes last on that date. One EDIT_DAY ledger line per changed
- * field, never asking why. 200 with the session.
+ * field. [[GTC-481]] E (decision 4): a new date after the send carries the host's why (`reason`, or
+ * null when skipped), as the event's own date does; a rename never asks. 200 with the session.
  */
 export async function PATCH(request: NextRequest, context: Ctx) {
   if (!isSessionsOn()) return closed();
@@ -49,6 +50,8 @@ export async function PATCH(request: NextRequest, context: Ctx) {
   if (name && 'error' in name) return NextResponse.json({ error: name.error }, { status: 400 });
   const date = 'date' in body ? readSessionDate(body.date) : null;
   if (date && 'error' in date) return NextResponse.json({ error: date.error }, { status: 400 });
+  const reason =
+    typeof body.reason === 'string' && body.reason.trim() !== '' ? body.reason.trim() : null;
 
   try {
     const session = await sessionOfEvent(dayId, eventId);
@@ -95,7 +98,7 @@ export async function PATCH(request: NextRequest, context: Ctx) {
         data,
         select: { id: true, name: true, date: true, displayOrder: true },
       });
-      await recordChange(tx, { eventId, actor: actor!, changes });
+      await recordChange(tx, { eventId, actor: actor!, changes, reason });
       return saved;
     });
     return NextResponse.json({ day });

@@ -19,6 +19,8 @@ import { CARD_WORDS } from '@/lib/sessions/card-words';
 import { datesFrom, sessionDateWords } from '@/lib/sessions/dates';
 import { nameIsDate } from '@/lib/sessions/tabs';
 import ComingTo, { type ComingHousehold } from '@/components/sessions/ComingTo';
+import { useReasonPrompt } from '@/components/plan/ReasonPrompt';
+import type { SerialisedEvent } from '@/lib/lifecycle';
 
 export interface CardSession {
   id: string;
@@ -32,6 +34,8 @@ export interface SessionsState {
   eventDates: { start: string; end: string };
   households: ComingHousehold[];
   absences: { personEventId: string; dayId: string }[];
+  /** [[GTC-481]] E: the event's phase, so a date moved after the send asks why first. */
+  lifecycle?: SerialisedEvent;
 }
 
 /** The most dates "Add one session for each date" is offered for (decision 3). */
@@ -69,6 +73,7 @@ export function SessionsCard({ eventId, initial }: { eventId: string; initial?: 
   const [error, setError] = useState<{ at: string; words: string } | null>(null);
   const [form, setForm] = useState<{ at: string; name: string; date: string } | null>(null);
   const [asking, setAsking] = useState<string | null>(null);
+  const { ask: askWhy, element: whyBox } = useReasonPrompt();
 
   const load = useCallback(async () => {
     try {
@@ -137,11 +142,25 @@ export function SessionsCard({ eventId, initial }: { eventId: string; initial?: 
   const saveForm = async () => {
     if (!form) return;
     const at = form.at;
+    // [[GTC-481]] E (decision 4): a session's date moved after the send asks why first, as the event's
+    // own date does (T5). Nothing is sent. A new session, or a rename, never asks.
+    const was = sessions.find((s) => s.id === at);
+    const why =
+      was && was.date !== form.date
+        ? await askWhy(
+            { action: 'EDIT_DAY', targetType: 'Day', targetId: at, field: 'date' },
+            state.lifecycle
+          )
+        : { proceed: true, reason: null };
+    if (!why.proceed) return;
     const ok =
       at === 'new'
         ? await run(at, () => fetch(daysUrl, json('POST', { name: form.name, date: form.date })))
         : await run(at, () =>
-            fetch(`${daysUrl}/${at}`, json('PATCH', { name: form.name, date: form.date }))
+            fetch(
+              `${daysUrl}/${at}`,
+              json('PATCH', { name: form.name, date: form.date, reason: why.reason })
+            )
           );
     if (ok) setForm(null);
   };
@@ -354,6 +373,8 @@ export function SessionsCard({ eventId, initial }: { eventId: string; initial?: 
           onSaved={load}
         />
       )}
+      {/* [[GTC-481]] E: the why box, over the page, only while a moved date asks. */}
+      {whyBox}
     </div>
   );
 }

@@ -52,7 +52,7 @@ export async function GET(_request: NextRequest, context: Ctx) {
   try {
     const event = await prisma.event.findUnique({
       where: { id: eventId },
-      select: { startDate: true, endDate: true },
+      select: { startDate: true, endDate: true, status: true, sentAt: true },
     });
     if (!event) return NextResponse.json({ error: 'Event not found' }, { status: 404 });
 
@@ -108,6 +108,13 @@ export async function GET(_request: NextRequest, context: Ctx) {
         };
       }),
       absences,
+      // [[GTC-481]] E: the event's phase, so the card asks why before a session's date moves after
+      // the send (the why-scope rule, src/lib/ledger.ts). Read by the card only.
+      lifecycle: {
+        status: event.status,
+        sentAt: event.sentAt ? event.sentAt.toISOString() : null,
+        endDate: event.endDate.toISOString(),
+      },
     });
   } catch (error) {
     console.error('Error reading sessions:', error);
