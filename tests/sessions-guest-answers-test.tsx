@@ -80,6 +80,15 @@ const git = (args: string[]) => {
   }
 };
 const atBase = (rel: string) => git(['show', `${BASE}:${rel}`]) ?? '';
+/**
+ * ⚠ [[GTC-483]] (26 Nov 2026, the founder's ruling 8 on its plan: "Yes to the new suite, the one
+ * moved pin"). The K check "the edited source files are exactly the seven named, and the four new
+ * ones" states GTC-481's own fact. GTC-483 edits one more source file (src/lib/sessions/card-words.ts,
+ * the dish words), so that one check reads the tree as GTC-481 merged it (MERGED) instead of the
+ * working folder: it still proves exactly what GTC-481 did. GTC-483's own suite holds its own file
+ * the same way. Every other check here still reads the working folder.
+ */
+const MERGED = '2c9771b';
 const count = (s: string, needle: string) => (needle ? s.split(needle).length - 1 : 0);
 const codeOnly = (s: string) => s.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 /** Loads a module, or null when it is not there yet (the red run, before the source). */
@@ -1156,7 +1165,8 @@ async function main() {
       untrackedSrc === '',
     { added, untrackedSrc }
   );
-  const changed = (git(['diff', '--name-only', BASE, '--', 'src']) ?? '')
+  // [[GTC-483]]: as GTC-481 merged them (MERGED), not the working folder; see the note at MERGED.
+  const changed = (git(['diff', '--name-only', BASE, MERGED, '--', 'src']) ?? '')
     .split('\n')
     .filter(Boolean);
   check(
