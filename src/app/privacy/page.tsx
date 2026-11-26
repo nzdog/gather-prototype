@@ -7,7 +7,7 @@ export default function PrivacyPolicy() {
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-3xl mx-auto px-6 py-12">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">Privacy Policy</h1>
-        <p className="text-sm text-gray-500 mb-8">Last updated: 20 November 2026</p>
+        <p className="text-sm text-gray-500 mb-8">Last updated: 27 November 2026</p>
 
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 space-y-8">
           {/* Who We Are */}
@@ -78,13 +78,14 @@ export default function PrivacyPolicy() {
 
               <div>
                 <strong className="text-gray-900">Visit counts:</strong> each time the home page,
-                the demo page or the new-event page is opened, Gather writes one line to its server
-                log with the page&apos;s name and where the visitor came from: the name of the
-                website their browser reports (such as facebook.com), &quot;internal&quot; for one
-                of Gather&apos;s own pages, or &quot;direct&quot; if the browser does not say.
-                Nothing else about the visitor is written: no internet address, no browser
-                description, no cookie and no full web address. If the link carried one of
-                Gather&apos;s own campaign labels (such as facebook), that label is written too.
+                the demo page, the sample&apos;s start page or the new-event page is opened, Gather
+                writes one line to its server log with the page&apos;s name and where the visitor
+                came from: the name of the website their browser reports (such as facebook.com),
+                &quot;internal&quot; for one of Gather&apos;s own pages, or &quot;direct&quot; if
+                the browser does not say. Nothing else about the visitor is written: no internet
+                address, no browser description, no cookie and no full web address. If the link
+                carried one of Gather&apos;s own campaign labels (such as facebook), that label is
+                written too.
               </div>
 
               <div>

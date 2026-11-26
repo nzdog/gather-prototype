@@ -462,7 +462,9 @@ export const CHECKS = {
   demoOverHttp(status: number, html: string): boolean {
     return (
       status === 200 &&
-      count(html, `>${TRY_IT}</button>`) === 1 &&
+      // [[GTC-486]] (founder ruling A, 26 Nov 2026: "Add a second 'Try it yourself' button at the
+      // foot of the steps, under the same switch as the first"): exactly two, where it was one.
+      count(html, `>${TRY_IT}</button>`) === 2 &&
       !html.includes(NOTE) &&
       !html.includes(W58)
     );
@@ -755,7 +757,7 @@ async function layerH() {
   const demo = await get('/demo');
   assert(
     'H',
-    'H1 GET /demo is 200 with the "Try it yourself" button and no note',
+    'H1 GET /demo is 200 with the "Try it yourself" buttons (two since GTC-486) and no note',
     CHECKS.demoOverHttp(demo.status, demo.html),
     demo.error || `status ${demo.status}`
   );

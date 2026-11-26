@@ -446,8 +446,10 @@ function runPrivacy() {
   // [[GTC-464]] (founder ruling, 16 Nov 2026): the date moves with the page's new words.
   assert(
     'F',
-    'F2 "Last updated: 20 November 2026"',
-    page.includes('Last updated: 20 November 2026')
+    // [[GTC-486]] (founder rulings, 26 and 27 Nov 2026): the date moves with the visit-count words,
+    // to the deploy day.
+    'F2 "Last updated: 27 November 2026"',
+    page.includes('Last updated: 27 November 2026')
   );
   assert(
     'F',

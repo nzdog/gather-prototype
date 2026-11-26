@@ -15,7 +15,8 @@
  *   N4 "Go to it →" is a link drawn like a button, inside the box, only with a link
  *   N5 the old small grey line is gone; the privacy line is right under the button
  *   N6 CONTROL: the same outcomes reach the box; the pause and the privacy words are as at main
- *   N7 CONTROL: start-limit.ts, new-event.ts and the layout are as at main (no word changed)
+ *   N7 CONTROL: start-limit.ts, new-event.ts and the layout are as at main (no word changed);
+ *      [[GTC-486]]: the layout but for the visit count's import and its one call
  *   N8 CONTROL: nothing of price, payment or Stripe
  *
  * SAFETY. No browser, no database, no network, no server. Reads files and runs `git` read-only.
@@ -38,6 +39,34 @@ const WORD_FILES = [
 ];
 
 const git = (args: string[]) => spawnSync('git', args, { cwd: ROOT, encoding: 'utf8' });
+
+/**
+ * [[GTC-486]] (founder ruling E, 26 Nov 2026: "Count /demo/new as a fourth page", by "a layout
+ * file with one call"): the one change N7 lets the layout carry. Against main ab463ca, nothing
+ * removed, and the only added code is the counter's import and its one call, in that order; any
+ * other added line is a comment.
+ */
+const LAYOUT = 'src/app/demo/new/layout.tsx';
+const GTC486_LAYOUT_CODE = [
+  "import { countPageVisit } from '@/lib/page-visit';",
+  "  await countPageVisit('sample');",
+];
+function layoutMovedByGtc486Only(): boolean {
+  const d = git(['diff', '--unified=0', MAIN, '--', LAYOUT]);
+  if (d.status !== 0) return false;
+  const lines = d.stdout.split('\n');
+  const removed = lines.filter((l) => l.startsWith('-') && !l.startsWith('---'));
+  const added = lines
+    .filter((l) => l.startsWith('+') && !l.startsWith('+++'))
+    .map((l) => l.slice(1))
+    .filter((l) => !/^\s*(\/\*\*?|\*|\*\/|\/\/)/.test(l) && l.trim() !== '');
+  return (
+    removed.length === 0 &&
+    JSON.stringify(added) === JSON.stringify(GTC486_LAYOUT_CODE) &&
+    git(['status', '--porcelain', '--untracked-files=all', '--', LAYOUT]).stdout.trim() !==
+      '?? ' + LAYOUT
+  );
+}
 const stripComments = (src: string) =>
   src
     .replace(/\{\/\*[\s\S]*?\*\/\}/g, '')
@@ -192,11 +221,12 @@ function main() {
 
   const moved = WORD_FILES.filter(
     (f) =>
-      git(['diff', '--quiet', MAIN, '--', f]).status !== 0 ||
-      git(['status', '--porcelain', '--untracked-files=all', '--', f]).stdout.trim() !== ''
+      !(f === LAYOUT && layoutMovedByGtc486Only()) &&
+      (git(['diff', '--quiet', MAIN, '--', f]).status !== 0 ||
+        git(['status', '--porcelain', '--untracked-files=all', '--', f]).stdout.trim() !== '')
   );
   assert(
-    'N7 CONTROL: start-limit.ts, new-event.ts and the layout are as at main ab463ca',
+    'N7 CONTROL: start-limit.ts, new-event.ts and the layout are as at main ab463ca (the layout but for GTC-486’s visit count, its import and its one call)',
     moved.length === 0,
     moved.join(', ')
   );
