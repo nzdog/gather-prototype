@@ -212,7 +212,7 @@ const EDITED: Record<string, { sha: string; numstat: string }> = {
     numstat: '98 3',
   },
   [F.write]: {
-    sha: 'ae6e9838ea618ab223626aed959e30279868185ccaa3654aad21ed74bbce0077',
+    sha: '61550040c02c757ebea52b79f3181c941d05989b76436cf27f4885473a9f7fc8',
     numstat: '189 4',
   },
   [F.finalize]: {
