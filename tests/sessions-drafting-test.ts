@@ -612,6 +612,13 @@ function mainCopies() {
   for (const [name, rel] of Object.entries(COPIES)) {
     const src = atMain(rel).replace(/from '([^']+)'/g, (whole, spec: string) => {
       if (local[spec]) return `from '${local[spec]}'`;
+      // A relative import (prompts.ts's './config-loader') means the file beside the original in
+      // the repo, or the scratch copy when it is one of the five.
+      if (spec.startsWith('./') || spec.startsWith('../')) {
+        const abs = path.join(ROOT, path.dirname(rel), spec);
+        const alias = `@/${path.relative(path.join(ROOT, 'src'), abs)}`;
+        return `from '${local[alias] ?? abs}'`;
+      }
       if (spec.startsWith('@/')) return `from '${path.join(ROOT, 'src', spec.slice(2))}'`;
       if (spec === 'next/server') return `from '${nextServer}'`;
       if (spec === '@prisma/client') return `from '${prismaClient}'`;
