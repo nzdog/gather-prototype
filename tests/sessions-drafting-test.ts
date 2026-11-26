@@ -18,6 +18,9 @@
  *      session field, every dish on one session, a reply cut off at the cap
  *   B  the write: one transaction; a session removed while the AI answered; the host's rows kept
  *   C  regenerate-plan, both scopes, the same way through the same one definition of the input
+ *   N  the two safety nets (the founder's ruling at the decision gate, 27 Nov 2026): no session
+ *      label reaches a row or the screen (each becomes its session's name), and a regenerate writes
+ *      no twin of a row being kept; both only with sessions in the prompt
  *   E  the cap and the AI library as at c8b9b42
  *   K  the files: the five edited files exactly as written, nothing else in src, no migration, no
  *      route, one script line, the send and the guest page as at c8b9b42, the switch's readers
@@ -205,20 +208,20 @@ const EDITED: Record<string, { sha: string; numstat: string }> = {
     numstat: '94 0',
   },
   [F.prompts]: {
-    sha: '371c0fc43686ab32314cddfd5bbc717f8ad3547b715c639b8e1ee428db194887',
-    numstat: '89 3',
+    sha: 'c519944e8bda324b8c980664c8e9a9a1e2226051fd64e7e855320b8c2e554770',
+    numstat: '98 3',
   },
   [F.write]: {
-    sha: 'a92de5fbea0ee916907cb940aaf92a556a145bd4441968628df0d0f9169b54b0',
-    numstat: '61 3',
+    sha: 'ae6e9838ea618ab223626aed959e30279868185ccaa3654aad21ed74bbce0077',
+    numstat: '189 4',
   },
   [F.finalize]: {
-    sha: '09ffa952be9f28f4567334cca97711313724141439e5323f218251f906d7e9e0',
-    numstat: '29 2',
+    sha: '342300bf67c8ed9e3340e0cfdf3d141e278233d26f53806fa459fa75c276e209',
+    numstat: '45 2',
   },
   [F.regenerate]: {
-    sha: 'dfdb5bc53231d56d94d121578a62f4b1ae3846f87d6580e038da352234698b71',
-    numstat: '29 4',
+    sha: '13d265fd382de1c47f46cf369e4a858c7d800bce545886bf82d33744d2e56d3b',
+    numstat: '55 4',
   },
 };
 /** K: the switch's readers after this ticket: GTC-483's eighteen and plan-input.ts. */
@@ -463,8 +466,20 @@ async function makeEvent(shape: Shape, opts: { households?: boolean } = {}): Pro
 }
 
 // ── Canned replies ──────────────────────────────────────────────────────────────────────────
-type It = { name: string; q?: number; unit?: string; session?: unknown; tags?: string[] };
-function reply(sections: Record<string, It[]>, extra: { badQuantity?: boolean } = {}): string {
+type It = {
+  name: string;
+  q?: number;
+  unit?: string;
+  session?: unknown;
+  tags?: string[];
+  notes?: string;
+  serving?: string;
+  reason?: string;
+};
+function reply(
+  sections: Record<string, It[]>,
+  extra: { badQuantity?: boolean; tasks?: object[]; things?: object[] } = {}
+): string {
   const labels: Record<string, string> = {
     mains: 'Mains',
     dessert: 'Dessert',
@@ -480,18 +495,19 @@ function reply(sections: Record<string, It[]>, extra: { badQuantity?: boolean } 
         name: it.name,
         quantity: extra.badQuantity && i === items.length - 1 ? 'lots' : (it.q ?? 2),
         unit: it.unit ?? 'kg',
-        servingSize: 'serves 8',
-        critical: false,
-        criticalReason: null,
+        servingSize: it.serving ?? 'serves 8',
+        critical: it.reason !== undefined,
+        criticalReason: it.reason ?? null,
         dietaryTags: it.tags ?? [],
       };
+      if (it.notes !== undefined) row.notes = it.notes;
       if ('session' in it) row.session = it.session;
       return row;
     }),
   }));
   return JSON.stringify({
     sections: out,
-    tasks: [
+    tasks: extra.tasks ?? [
       { bucket: 'set_up', name: 'Set up the tables on the deck' },
       { bucket: 'clean_up', name: 'Wash the dishes' },
     ],
@@ -499,9 +515,22 @@ function reply(sections: Record<string, It[]>, extra: { badQuantity?: boolean } 
       { requirement: 'Vegetarian', covered: true, flaggedItems: ['Roast vegetables'] },
       { requirement: 'Gluten-free', covered: true, flaggedItems: ['Glazed ham'] },
     ],
-    thingsToConsider: [{ name: 'Napkins', category: 'Table' }],
+    thingsToConsider: extra.things ?? [{ name: 'Napkins', category: 'Table' }],
   });
 }
+/** The reply's session counts: finalize-plan's and regenerate-plan's, five sessions. */
+const FIN = (unplaced: number, relabelled = 0, relabelledJobs = 0) => ({
+  sessions: 5,
+  unplaced,
+  relabelled,
+  relabelledJobs,
+});
+const REGEN = (unplaced: number, relabelled = 0, twins = 0) => ({
+  sessions: 5,
+  unplaced,
+  relabelled,
+  twins,
+});
 /** A plain plan with no sessions in it (what today's prompt gets back). */
 const PLAIN = reply({
   mains: [{ name: 'Glazed ham', q: 4 }, { name: 'Roast lamb', q: 3 }, { name: 'Nut roast' }],
@@ -774,7 +803,11 @@ async function main() {
     '- Every item gets a "session": the label of the session it is eaten',
     '  at (S1 to S5), or "whole" for something bought once and used',
     '  across sessions (a stock of drinks, ice, snacks to graze on). Use',
-    '  no other value.',
+    "  no other value. A dish cooked for one meal belongs to that meal's",
+    '  session, even when its leftovers are eaten later.',
+    '- The labels are for the "session" field only. In an item\'s name,',
+    '  notes and serving size, call a session by its name ("Christmas Eve dinner"),',
+    '  never by its label.',
     "- Size each item for its own session's headcount, not the whole",
     "  event's.",
     "- Kate's selections are for the event as a whole: put each where it",
@@ -784,8 +817,10 @@ async function main() {
     '  items than the main meal. The plan size guidance is for one main',
     '  meal.',
     '- Never list the same item twice in one session. List an item in two',
-    '  sessions only if it is really eaten at both; prefer a note',
-    '  ("leftover ham from S2") to buying the same thing again.',
+    '  sessions only if it is really bought or made for both.',
+    "- Never list leftovers as an item of their own. When a dish's",
+    "  leftovers are eaten at a later session, say so in that dish's notes",
+    '  (for example "leftovers served cold at Boxing Day dinner").',
     '- Cover each dietary requirement at every session that has a meal.',
     '- A session with 0 coming gets no items.',
   ].join('\n');
@@ -862,11 +897,16 @@ async function main() {
     const u2 = (await call(liveFinalize, 'finalize', f2.id)).prompt?.user ?? '';
     check(
       'A6',
-      'one session: "(S1)" and "leftover ham from S1"; two: "(S1 or S2)", the dinner 13 coming (7 adults, 6 children)',
+      'one session: "(S1)", named by "Christmas lunch", no leftovers example; two: "(S1 or S2)", the dinner 13 coming (7 adults, 6 children), the example "Christmas dinner"',
       u1.includes('  at (S1), or "whole"') &&
-        u1.includes('("leftover ham from S1")') &&
+        u1.includes('call a session by its name ("Christmas lunch"),') &&
+        u1.includes("say so in that dish's notes.") &&
+        !u1.includes('for example "leftovers') &&
+        !/\bS2\b/.test(u1) &&
         u1.includes('"session": string           // S1, or "whole"') &&
         u2.includes('  at (S1 or S2), or "whole"') &&
+        u2.includes('call a session by its name ("Christmas lunch"),') &&
+        u2.includes('(for example "leftovers served cold at Christmas dinner")') &&
         u2.includes('- S2: Christmas dinner, Fri 25 Dec, 13 coming (7 adults, 6 children)')
     );
     const f0 = await makeEvent('five', { households: false });
@@ -933,7 +973,7 @@ async function main() {
           'Potato salad': 'S1',
           'L&P': 'whole',
         }) &&
-        same(r5.json?.plan?.sessionDraft, { sessions: 5, unplaced: 0 }) &&
+        same(r5.json?.plan?.sessionDraft, FIN(0)) &&
         unplacedLines().length === 0,
       { got, draft: r5.json?.plan?.sessionDraft }
     );
@@ -964,7 +1004,7 @@ async function main() {
       'F3',
       'an unknown label: kept on the whole event, never dropped, counted in the reply and in one log line',
       same(got, { 'Glazed ham': 'S2', 'Roast lamb': 'whole', Sausages: 'whole' }) &&
-        same(r.json?.plan?.sessionDraft, { sessions: 5, unplaced: 2 }) &&
+        same(r.json?.plan?.sessionDraft, FIN(2)) &&
         lines.length === 1 &&
         lines[0].includes('missing 0, unknown 2, gone 0'),
       { got, draft: r.json?.plan?.sessionDraft, lines }
@@ -990,7 +1030,7 @@ async function main() {
       'a label carrying another event’s session id: on the whole event, counted; no row points at that session',
       same(got, { 'Glazed ham': 'whole', 'Roast lamb': 'S2' }) &&
         onOther === 0 &&
-        same(r.json?.plan?.sessionDraft, { sessions: 5, unplaced: 1 }) &&
+        same(r.json?.plan?.sessionDraft, FIN(1)) &&
         unplacedLines().length === before + 1,
       { got, onOther, draft: r.json?.plan?.sessionDraft }
     );
@@ -1020,7 +1060,7 @@ async function main() {
         Sausages: 'whole',
         'Nut roast': 'S1',
       }) &&
-        same(r.json?.plan?.sessionDraft, { sessions: 5, unplaced: 3 }) &&
+        same(r.json?.plan?.sessionDraft, FIN(3)) &&
         lines.length === 1 &&
         lines[0].includes('missing 3, unknown 0, gone 0'),
       { got, lines }
@@ -1045,7 +1085,7 @@ async function main() {
       'every dish on one session: all of them there, nothing counted',
       Object.keys(got).length === 4 &&
         Object.values(got).every((s) => s === 'S2') &&
-        same(r.json?.plan?.sessionDraft, { sessions: 5, unplaced: 0 }),
+        same(r.json?.plan?.sessionDraft, FIN(0)),
       got
     );
   }
@@ -1095,7 +1135,7 @@ async function main() {
         got['Barbecued lamb chops'] === 'whole' &&
         got['Fresh fruit salad'] === 'whole' &&
         got['Glazed ham'] === 'S2' &&
-        same(r.json?.plan?.sessionDraft, { sessions: 5, unplaced: 2 }) &&
+        same(r.json?.plan?.sessionDraft, FIN(2)) &&
         lines.length === 1 &&
         lines[0].includes('missing 0, unknown 0, gone 2'),
       { got, lines }
@@ -1211,7 +1251,7 @@ async function main() {
         got['Christmas pudding'] === 'S2' &&
         got['Glazed ham'] === 'S3' &&
         got['L&P'] === 'whole' &&
-        same(r.json?.sessionDraft, { sessions: 5, unplaced: 0 }) &&
+        same(r.json?.sessionDraft, REGEN(0)) &&
         r.calls === 1,
       { got, draft: r.json?.sessionDraft }
     );
@@ -1248,11 +1288,262 @@ async function main() {
           outside.map((i) => [i.id, i.dayId]),
           before.map((i) => [i.id, i.dayId])
         ) &&
-        same(rc.json?.sessionDraft, { sessions: 5, unplaced: 1 }),
+        same(rc.json?.sessionDraft, REGEN(1)),
       { got2, draft: rc.json?.sessionDraft }
     );
   }
   off();
+
+  // ══ N — the two safety nets ════════════════════════════════════════════════════════════════
+  section(
+    'N — the safety nets: no label reaches a row; no twin of a kept dish (both only with sessions)'
+  );
+  const hasLabel = (t: unknown) => /\bS[1-5]\b/.test(JSON.stringify(t));
+  {
+    const fx = await makeEvent('five');
+    const before = logged.length;
+    canned = {
+      content: reply(
+        {
+          mains: [
+            {
+              name: 'Glazed ham',
+              session: 'S2',
+              notes:
+                'Cook for S2 Christmas lunch; leftovers serve S3 evening and S5 Boxing Day dinner cold.',
+            },
+            { name: 'Sausages', session: 'S1', serving: 'serves 9 at S1' },
+            { name: 'Ham rolls', session: ' s3 ', reason: 'The S3 supper needs it' },
+          ],
+          sides_salads: [{ name: 'Garden salad (S2)', session: 'S2' }],
+          dessert: [
+            { name: 'Pavlova', session: 'S2', notes: 'S9, S12, PS2 and S2X stay as written' },
+          ],
+        },
+        {
+          tasks: [
+            { bucket: 'set_up', name: 'Set up the tables on the deck for S2' },
+            { bucket: 'clean_up', name: 'Wash the dishes', notes: 'After S2 and after S5' },
+          ],
+          things: [{ name: 'Extra chairs for S2', category: 'Table' }],
+        }
+      ),
+    };
+    const r = await call(liveFinalize, 'finalize', fx.id);
+    const all = await rows(fx.id);
+    const by = (n: string) => all.find((i) => i.name === n);
+    const lines = logged.slice(before).filter((l) => l.includes('named a session by its label'));
+    check(
+      'N1',
+      'a label in a dish’s name, notes, serving line or reason, or a job’s, becomes its session’s name; the session field is untouched; counted in the reply and in one log line',
+      r.status === 200 &&
+        by('Glazed ham')?.notes ===
+          'Cook for Christmas lunch; leftovers serve Christmas evening and Boxing Day dinner cold.' &&
+        by('Sausages')?.quantityText === 'serves 9 at Christmas Eve dinner' &&
+        by('Ham rolls')?.criticalReason === 'The Christmas evening supper needs it' &&
+        !!by('Garden salad (Christmas lunch)') &&
+        by('Pavlova')?.notes === 'S9, S12, PS2 and S2X stay as written' &&
+        by('Glazed ham')?.dayId === fx.days[1] &&
+        by('Ham rolls')?.dayId === fx.days[2] &&
+        by('Garden salad (Christmas lunch)')?.dayId === fx.days[1] &&
+        !!by('Set up the tables on the deck for Christmas lunch') &&
+        by('Wash the dishes')?.notes === 'After Christmas lunch and after Boxing Day dinner' &&
+        same(r.json?.plan?.sessionDraft, FIN(0, 4, 2)) &&
+        lines.length === 1 &&
+        lines[0].includes('4 drafted dish(es) and 2 job(s) named a session by its label'),
+      {
+        draft: r.json?.plan?.sessionDraft,
+        lines,
+        rows: all.map((i) => [i.name, i.notes, i.quantityText]),
+      }
+    );
+    check(
+      'N2',
+      'the screen just after Generate shows the names too: no label in the dishes, the jobs or the things to consider',
+      !hasLabel(r.json?.plan?.categories) &&
+        r.json?.plan?.thingsToConsider?.[0]?.name === 'Extra chairs for Christmas lunch',
+      { things: r.json?.plan?.thingsToConsider }
+    );
+  }
+  {
+    const names = {
+      S1: 'Christmas Eve dinner',
+      S2: 'Christmas lunch',
+      S3: 'Christmas evening',
+      S4: 'Boxing Day brunch',
+      S5: 'Boxing Day dinner',
+    };
+    const cases: [string, string][] = [
+      [
+        'Roast for Christmas lunch S2. Pairs with mint sauce.',
+        'Roast for Christmas lunch. Pairs with mint sauce.',
+      ],
+      [
+        'Casual BBQ for S3 Christmas evening (15 guests).',
+        'Casual BBQ for Christmas evening (15 guests).',
+      ],
+      [
+        'Pavlova leftovers and fruit (S3 evening)',
+        'Pavlova leftovers and fruit (Christmas evening)',
+      ],
+      ['S2: Christmas lunch centrepiece', 'Christmas lunch centrepiece'],
+      ['Boxing Day S5 favourite', 'Boxing Day dinner favourite'],
+      ['S2/S3 and s4', 'Christmas lunch/Christmas evening and Boxing Day brunch'],
+      ['S9, S12, PS2 and S2X', 'S9, S12, PS2 and S2X'],
+    ];
+    const got =
+      typeof liveWrite.relabelText === 'function'
+        ? cases.map(([t]) => liveWrite.relabelText(t, names))
+        : null;
+    check(
+      'N3',
+      'relabelText: a label beside its own session’s name, or part of it, says the name once; a label this event lacks, or inside a word, stays',
+      !!got && got.every((g: string, i: number) => g === cases[i][1]),
+      got
+    );
+  }
+  {
+    // A regenerate of the whole plan: the host moved the ham to S3 and edited L&P (both kept).
+    const fx = await makeEvent('five');
+    canned = { content: GOOD5 };
+    await call(liveFinalize, 'finalize', fx.id);
+    const fin = await rows(fx.id);
+    const ham = fin.find((i) => i.name === 'Glazed ham')!;
+    const lp = fin.find((i) => i.name === 'L&P')!;
+    await prisma.item.update({
+      where: { id: ham.id },
+      data: { dayId: fx.days[2], source: 'HOST_EDITED' },
+    });
+    await prisma.item.update({ where: { id: lp.id }, data: { source: 'HOST_EDITED' } });
+    const before = logged.length;
+    canned = {
+      content: reply({
+        mains: [
+          { name: 'glazed  HAM', session: 'S3' },
+          { name: 'Glazed ham', session: 'S2' },
+          { name: 'Roast chicken', session: 'S2' },
+        ],
+        sides_salads: [{ name: 'L&P', session: 'whole' }],
+        drinks_non_alcoholic: [{ name: 'L & P', session: 'whole' }],
+      }),
+    };
+    const r = await call(liveRegenerate, 'regenerate', fx.id, { scope: 'plan' });
+    const after = await rows(fx.id);
+    const where = (n: string) =>
+      after
+        .filter((i) => i.name.toLowerCase().replace(/\s+/g, '') === n)
+        .map(
+          (i) => `${i.team.name}@${i.dayId === null ? 'whole' : `S${fx.days.indexOf(i.dayId) + 1}`}`
+        )
+        .sort();
+    const lines = logged.slice(before).filter((l) => l.includes('twinned a row being kept'));
+    check(
+      'N4',
+      'the whole plan: a twin of a kept row (same name, case and spaces aside, same category, same session) is not written; the same name in another session or category is',
+      r.status === 200 &&
+        same(where('glazedham'), ['Mains@S2', 'Mains@S3']) &&
+        same(where('l&p'), ['Non-Alcoholic Drinks@whole', 'Sides & Salads@whole']) &&
+        after.some((i) => i.id === ham.id && i.dayId === fx.days[2]) &&
+        after.some((i) => i.id === lp.id) &&
+        same(r.json?.sessionDraft, REGEN(0, 0, 2)) &&
+        r.json?.createdCount === 3 &&
+        lines.length === 1 &&
+        lines[0].includes('2 drafted dish(es) twinned a row being kept'),
+      { ham: where('glazedham'), lp: where('l&p'), draft: r.json?.sessionDraft, lines }
+    );
+  }
+  {
+    // The measured case: the host moved the pavlova from Christmas lunch to Boxing Day dinner.
+    const fx = await makeEvent('five');
+    canned = { content: GOOD5 };
+    await call(liveFinalize, 'finalize', fx.id);
+    const pav = (await rows(fx.id)).find((i) => i.name === 'Pavlova')!;
+    await prisma.item.update({
+      where: { id: pav.id },
+      data: { dayId: fx.days[4], source: 'HOST_EDITED' },
+    });
+    canned = {
+      content: reply({
+        dessert: [
+          { name: 'Pavlova', session: 'S5' },
+          { name: 'Pavlova', session: 'S2' },
+          { name: 'Berry trifle', session: 'S2' },
+        ],
+      }),
+    };
+    const r = await call(liveRegenerate, 'regenerate', fx.id, {
+      scope: 'category',
+      categoryKey: 'dessert',
+    });
+    const desserts = (await rows(fx.id))
+      .filter((i) => i.team.name === 'Dessert')
+      .map((i) => `${i.name}@S${fx.days.indexOf(i.dayId ?? '') + 1}`)
+      .sort();
+    check(
+      'N5',
+      'Desserts only (the measured case): no second pavlova beside the host’s at Boxing Day dinner; one at Christmas lunch is written',
+      r.status === 200 &&
+        same(desserts, ['Berry trifle@S2', 'Pavlova@S2', 'Pavlova@S5']) &&
+        same(r.json?.sessionDraft, REGEN(0, 0, 1)),
+      { desserts, draft: r.json?.sessionDraft }
+    );
+  }
+  {
+    // Without the sessions block (the switch off with five sessions, or on with none), neither net
+    // acts: the rows are main's, field by field, labels and twin included.
+    const LABELLED = reply({
+      mains: [
+        { name: 'Glazed ham', session: 'S2', notes: 'Serve warm at S1; leftovers cold at S2.' },
+        { name: 'Garden salad (S2)', session: 'S2' },
+      ],
+    });
+    const results: boolean[] = [];
+    for (const [shape, switchOn] of [
+      ['five', false],
+      ['none', true],
+    ] as [Shape, boolean][]) {
+      const a = await makeEvent(shape);
+      const b = await makeEvent(shape);
+      (switchOn ? on : off)();
+      canned = { content: LABELLED };
+      const ma = await call(mainFinalize, 'finalize', a.id);
+      const lb = await call(liveFinalize, 'finalize', b.id);
+      const [fa, fb] = [await rows(a.id), await rows(b.id)];
+      for (const fx of [a, b]) {
+        const first = await prisma.item.findFirst({
+          where: { team: { eventId: fx.id, name: 'Mains' } },
+          orderBy: { displayOrder: 'asc' },
+        });
+        if (first)
+          await prisma.item.update({ where: { id: first.id }, data: { source: 'HOST_EDITED' } });
+      }
+      canned = {
+        content: reply({
+          mains: [{ name: 'Glazed ham', session: 'S2' }, { name: 'Roast chicken' }],
+        }),
+      };
+      const mr = await call(mainRegenerate, 'regenerate', a.id, { scope: 'plan' });
+      const lr = await call(liveRegenerate, 'regenerate', b.id, { scope: 'plan' });
+      const [ra, rb] = [await rows(a.id), await rows(b.id)];
+      results.push(
+        ma.status === 200 &&
+          same(ma.json, lb.json) &&
+          same(mr.json, lr.json) &&
+          !JSON.stringify(lr.json).includes('sessionDraft') &&
+          same(shapeOf(fa, a.days), shapeOf(fb, b.days)) &&
+          fb.some((i) => i.name === 'Garden salad (S2)') &&
+          fb.some((i) => i.notes === 'Serve warm at S1; leftovers cold at S2.') &&
+          same(shapeOf(ra, a.days), shapeOf(rb, b.days)) &&
+          rb.filter((i) => i.name === 'Glazed ham').length === 2
+      );
+    }
+    check(
+      'N6',
+      'without the sessions block (switch off with five sessions; on with none) neither net acts: labels kept as written, the twin written, the rows and replies main’s',
+      results.length === 2 && results.every(Boolean),
+      results
+    );
+  }
 
   // ══ E — the cap and the library ════════════════════════════════════════════════════════════
   section('E — the cap and the AI library');
