@@ -794,13 +794,25 @@ async function main() {
       CHECKS.itemReadPlace(read(AI_CAP))
     );
     const git = (...a: string[]) => spawnSync('git', a, { cwd: ROOT, encoding: 'utf8' });
-    const routes = git('diff', '--quiet', PARENT, '--', ...KEPT);
+    /*
+     * ⚠ [[GTC-482]] (26 Nov 2026, the founder's rulings on its plan: "Yes to the four moved checks as
+     * you describe them (sessions-release K2, K4 and S1; demo-plan-tries S2), each the narrowest way
+     * with a dated note naming GTC-482"). GTC-482 edits finalize-plan and regenerate-plan (the first
+     * two of KEPT), so those two are compared with 79d7d7e THROUGH the fixed copy c8b9b42, origin/main
+     * when GTC-482 began, where they are still byte for byte 79d7d7e's; the other four AI routes stay
+     * compared with the live files. What this gives up, said plainly: S2 no longer notices a later
+     * change to those two routes. tests/sessions-drafting-test.ts pins them as c8b9b42 plus exactly
+     * their named hunks.
+     */
+    const liveRoutes = git('diff', '--quiet', PARENT, '--', ...KEPT.slice(2));
+    const fixedRoutes = git('diff', '--quiet', PARENT, 'c8b9b42', '--', ...KEPT.slice(0, 2));
+    const routes = { status: liveRoutes.status !== 0 ? liveRoutes.status : fixedRoutes.status };
     const numstat = git('diff', '--numstat', PARENT, S3_BASE, '--', SETUP); // [[GTC-460]] (ruling 168): through the fixed copy
     const sameAtBase = git('diff', '--quiet', PARENT, BASE, '--', SETUP);
     const pieces = setupPieceHashes();
     assert(
       'S',
-      'S2 the six AI routes are byte for byte as at 79d7d7e; the setup page, as the fixed copy 51eda95 holds it (GTC-460, ruling 168), is as at 79d7d7e (and at the base 128b341) plus exactly GTC-449’s five pieces (+57 -1)',
+      'S2 the six AI routes are byte for byte as at 79d7d7e (finalize-plan and regenerate-plan as the fixed copy c8b9b42 holds them, GTC-482); the setup page, as the fixed copy 51eda95 holds it (GTC-460, ruling 168), is as at 79d7d7e (and at the base 128b341) plus exactly GTC-449’s five pieces (+57 -1)',
       CHECKS.kept(
         [...KEPT, SETUP].map((f) => fs.existsSync(path.join(ROOT, f))),
         routes.status,

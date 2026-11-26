@@ -41,6 +41,17 @@ import { installProviderTrap, trapCount } from './helpers/provider-trap';
 
 const ROOT = path.join(__dirname, '..');
 const BASE = '2c9771b'; // origin/main when GTC-483 began (the merge of GTC-481)
+/**
+ * ⚠ [[GTC-482]] (26 Nov 2026, the founder's rulings on its plan: "Yes to the four moved checks as you
+ * describe them (sessions-release K2, K4 and S1; demo-plan-tries S2), each the narrowest way with a
+ * dated note naming GTC-482"). GTC-483 as merged into main (pull request #125). K2 ("the edited
+ * source files are exactly the one named") and K4 ("package.json gains exactly one line") state
+ * GTC-483's own diff, so they read 2c9771b against this merge instead of the working folder, as
+ * GTC-483 moved sessions-guest-answers' K13. What this gives up, said plainly: K2 and K4 no longer
+ * notice a later edit; each later ticket's suite watches its own. package-lock.json and the
+ * untracked files are still read live.
+ */
+const MERGED = 'c8b9b42';
 const TAG = `S483${Date.now().toString(36)}`;
 const VAR = 'GATHER_SESSIONS';
 const FIXTURE_FILE =
@@ -205,6 +216,11 @@ const SWITCH_READERS = [
   'src/components/sessions/Moment1Sessions.tsx',
   'src/components/sessions/SessionTabs.tsx',
   'src/components/sessions/SessionsSwitch.tsx',
+  // ⚠ [[GTC-482]] (26 Nov 2026, the founder's rulings on its plan: "Yes to the four moved checks as
+  // you describe them (sessions-release K2, K4 and S1 ...), each the narrowest way with a dated note
+  // naming GTC-482"). The drafting reads the switch to tell the one AI call the sessions. Exactly
+  // this one name is added; S1 and S2 still read the working folder.
+  'src/lib/ai/plan-input.ts',
   'src/lib/glance/read.ts',
   'src/lib/lifecycle.ts',
   'src/lib/moment3/share-dish.ts',
@@ -903,7 +919,7 @@ async function main() {
       want !== null && read(file) === want
     );
   }
-  const changed = (git(['diff', '--name-only', BASE, '--', 'src']) ?? 'x')
+  const changed = (git(['diff', '--name-only', BASE, MERGED, '--', 'src']) ?? 'x') // [[GTC-482]]: as merged
     .split('\n')
     .filter(Boolean);
   check(
@@ -918,7 +934,7 @@ async function main() {
     git(['diff', '--quiet', BASE, '--', 'prisma']) !== null &&
       (git(['ls-files', '--others', '--exclude-standard', 'prisma']) ?? 'x').trim() === ''
   );
-  const pkgDiff = (git(['diff', '-U0', '--no-color', BASE, '--', 'package.json']) ?? '')
+  const pkgDiff = (git(['diff', '-U0', '--no-color', BASE, MERGED, '--', 'package.json']) ?? '') // [[GTC-482]]: as merged
     .split('\n')
     .filter((l) => /^[+-]/.test(l) && !/^(\+\+\+|---)/.test(l));
   check(
