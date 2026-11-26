@@ -1298,6 +1298,7 @@ async function main() {
   section(
     'N — the safety nets: no label reaches a row; no twin of a kept dish (both only with sessions)'
   );
+  on();
   const hasLabel = (t: unknown) => /\bS[1-5]\b/.test(JSON.stringify(t));
   {
     const fx = await makeEvent('five');
@@ -1544,6 +1545,7 @@ async function main() {
       results
     );
   }
+  off();
 
   // ══ E — the cap and the library ════════════════════════════════════════════════════════════
   section('E — the cap and the AI library');
