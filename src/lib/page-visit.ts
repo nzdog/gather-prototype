@@ -1,12 +1,17 @@
 /**
  * [[GTC-466]] — THE VISIT COUNT. One plain line in the server log for each real load of the home
- * page, /demo and the new-event page (/plan/new), with no cookie and no address (founder ruling of
+ * page, /demo, the sample's start page (/demo/new, since GTC-486) and the new-event page
+ * (/plan/new), with no cookie and no address (founder ruling of
  * 15 Nov 2026, "a simple daily count, no cookies or addresses", and the rulings of 19 Nov 2026,
  * verbatim in docs/tickets/GTC-466.md):
  *
+ * [[GTC-486]] (founder ruling E, 26 Nov 2026: "Count /demo/new as a fourth page"; "No campaign tag
+ * on /demo/new"): a fourth page, `sample`, the sample's start page, so a press of "Try it yourself"
+ * can be told from a visit that stopped at /demo.
+ *
  *   [page-visit] <page> <source>[ tag=<label>]
  *
- *   page    home, demo or new: from the code, never from the request.
+ *   page    home, demo, new or sample: from the code, never from the request.
  *   source  where the browser says the visitor came from, cut to the site's main name
  *           (facebook.com, instagram.com, google.com, nzherald.co.nz); "internal" for Gather's
  *           own pages and for a move inside the site; "direct" when no Referer comes; "other"
@@ -26,8 +31,11 @@ import { headers } from 'next/headers';
 import { unstable_rethrow } from 'next/navigation';
 import { SITE_URL } from '@/lib/share-preview';
 
-export const VISIT_PAGES = ['home', 'demo', 'new'] as const;
+export const VISIT_PAGES = ['home', 'demo', 'new', 'sample'] as const;
 export type VisitPage = (typeof VISIT_PAGES)[number];
+
+/** Founder ruling Q8 (19 Nov 2026): the pages a campaign tag may be written for. */
+const TAGGED_PAGES: readonly VisitPage[] = ['home', 'demo'];
 
 /** Founder ruling Q8 (19 Nov 2026): the only campaign labels a line may carry. */
 export const CAMPAIGN_LABELS = [
@@ -49,7 +57,7 @@ export type VisitPageProps = { searchParams: VisitSearchParams };
 
 /** The one shape a line may have. Nothing else is ever printed as a visit. */
 export const VISIT_LINE =
-  /^\[page-visit\] (home|demo|new) (direct|internal|other|[a-z0-9][a-z0-9.-]{0,63})( tag=(facebook|instagram|email|flyer|podcast|magazine))?$/;
+  /^\[page-visit\] (home|demo|new|sample) (direct|internal|other|[a-z0-9][a-z0-9.-]{0,63})( tag=(facebook|instagram|email|flyer|podcast|magazine))?$/;
 
 interface HeaderReader {
   get(name: string): string | null;
@@ -175,7 +183,7 @@ export function pageVisitLine(
   const kind = visitKind(h);
   if (kind === null) return null;
   const source = kind === 'move' ? 'internal' : visitSource(h.get('referer'), h.get('host'));
-  const tag = page === 'new' ? null : campaignTag(utmSource);
+  const tag = TAGGED_PAGES.includes(page) ? campaignTag(utmSource) : null;
   const line = `[page-visit] ${page} ${source}${tag === null ? '' : ` tag=${tag}`}`;
   return VISIT_LINE.test(line) ? line : null;
 }
@@ -220,7 +228,7 @@ export async function countPageVisit(
     const h = await headers();
     if (visitKind(h) === null) return;
     const utmSource =
-      page === 'new' || !searchParams ? undefined : (await searchParams)?.utm_source;
+      !TAGGED_PAGES.includes(page) || !searchParams ? undefined : (await searchParams)?.utm_source;
     const line = pageVisitLine(page, h, utmSource);
     if (line === null) return;
     const { allow, note } = cap(Date.now());

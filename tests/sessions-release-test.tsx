@@ -41,6 +41,15 @@ import { installProviderTrap, trapCount } from './helpers/provider-trap';
 
 const ROOT = path.join(__dirname, '..');
 const BASE = '2c9771b'; // origin/main when GTC-483 began (the merge of GTC-481)
+/**
+ * ⚠ [[GTC-486]] (26 Nov 2026, GTC-486's gate; for the founder's word, as GTC-483 moved GTC-481's
+ * pins). K's "the edited source files are exactly the one named" and "package.json gains exactly
+ * one line" state GTC-483's own facts. GTC-486 edits five more source files and adds its own
+ * script line, so those two checks read the tree as GTC-483 merged it (MERGED, the merge of pull
+ * request #125) instead of the working folder: they still prove exactly what GTC-483 did. Every
+ * other check here still reads the working folder.
+ */
+const MERGED = 'c8b9b42';
 const TAG = `S483${Date.now().toString(36)}`;
 const VAR = 'GATHER_SESSIONS';
 const FIXTURE_FILE =
@@ -903,7 +912,8 @@ async function main() {
       want !== null && read(file) === want
     );
   }
-  const changed = (git(['diff', '--name-only', BASE, '--', 'src']) ?? 'x')
+  // [[GTC-486]]: as GTC-483 merged them (MERGED), not the working folder; see the note at MERGED.
+  const changed = (git(['diff', '--name-only', BASE, MERGED, '--', 'src']) ?? 'x')
     .split('\n')
     .filter(Boolean);
   check(
@@ -918,7 +928,8 @@ async function main() {
     git(['diff', '--quiet', BASE, '--', 'prisma']) !== null &&
       (git(['ls-files', '--others', '--exclude-standard', 'prisma']) ?? 'x').trim() === ''
   );
-  const pkgDiff = (git(['diff', '-U0', '--no-color', BASE, '--', 'package.json']) ?? '')
+  // [[GTC-486]]: as GTC-483 merged it (MERGED), not the working folder; see the note at MERGED.
+  const pkgDiff = (git(['diff', '-U0', '--no-color', BASE, MERGED, '--', 'package.json']) ?? '')
     .split('\n')
     .filter((l) => /^[+-]/.test(l) && !/^(\+\+\+|---)/.test(l));
   check(
