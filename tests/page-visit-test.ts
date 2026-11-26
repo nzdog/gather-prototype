@@ -1001,10 +1001,12 @@ const CHECKS: Check[] = [
       !/page-visit|countPageVisit/.test(i.read(SAMPLE_PAGE)),
     breakIt: (i) =>
       // The counter moved above the switch: a closed demo's not-found would be counted.
+      // Each skipped comment line must end at its own line break, so the pattern can read the
+      // gap only one way (CodeQL alert 157, 27 Nov 2026: the old form could take very long).
       editFile(
         i,
         SAMPLE_LAYOUT,
-        /if \(!isDemoStartOn\(\)\) notFound\(\);(\s*(?:\/\/[^\n]*\s*)*)await countPageVisit\('sample'\);/,
+        /if \(!isDemoStartOn\(\)\) notFound\(\);((?:\s*\/\/[^\n]*\n)*\s*)await countPageVisit\('sample'\);/,
         "await countPageVisit('sample');$1if (!isDemoStartOn()) notFound();"
       ),
   },

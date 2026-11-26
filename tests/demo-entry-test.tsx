@@ -85,8 +85,19 @@ const codeOnly = (src: string) =>
     .replace(/\/\*[\s\S]*?\*\//g, '')
     .replace(/(^|[^:])\/\/.*$/gm, '$1');
 const count = (s: string, needle: string) => (needle === '' ? 0 : s.split(needle).length - 1);
-/** The visible words: tags taken out. */
-const words = (html: string) => html.replace(/<[^>]*>/g, '');
+/**
+ * The visible words: tags taken out, again and again until nothing changes, so no piece of a tag
+ * can be left behind (CodeQL alert 158, 27 Nov 2026; the result for Gather's own page is the same).
+ */
+const words = (html: string) => {
+  let out = html;
+  let previous: string;
+  do {
+    previous = out;
+    out = out.replace(/<[^>]*>/g, '');
+  } while (out !== previous);
+  return out;
+};
 function walk(dir: string): string[] {
   const out: string[] = [];
   const full = path.join(ROOT, dir);
