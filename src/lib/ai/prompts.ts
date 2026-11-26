@@ -592,11 +592,17 @@ function sessionsBlockFor(sessions: readonly PlanGenerationSessionInput[]): {
     const who = s.coming !== undefined ? `, ${s.coming} coming${split}` : '';
     return `- ${s.label}: ${s.name}${when}${who}`;
   });
+  const first = sessions[0].name;
+  const last = sessions[n - 1].name;
   const rules = [
     `- Every item gets a "session": the label of the session it is eaten
   at (${labels}), or "whole" for something bought once and used
   across sessions (a stock of drinks, ice, snacks to graze on). Use
-  no other value.`,
+  no other value. A dish cooked for one meal belongs to that meal's
+  session, even when its leftovers are eaten later.`,
+    `- The labels are for the "session" field only. In an item's name,
+  notes and serving size, call a session by its name ("${first}"),
+  never by its label.`,
     ...(counted
       ? [
           `- Size each item for its own session's headcount, not the whole
@@ -610,8 +616,11 @@ function sessionsBlockFor(sessions: readonly PlanGenerationSessionInput[]): {
   items than the main meal. The plan size guidance is for one main
   meal.`,
     `- Never list the same item twice in one session. List an item in two
-  sessions only if it is really eaten at both; prefer a note
-  ("leftover ham from ${n >= 2 ? 'S2' : 'S1'}") to buying the same thing again.`,
+  sessions only if it is really bought or made for both.`,
+    `- Never list leftovers as an item of their own. When a dish's
+  leftovers are eaten at a later session, say so in that dish's notes${
+    n >= 2 ? `\n  (for example "leftovers served cold at ${last}")` : ''
+  }.`,
     `- Cover each dietary requirement at every session that has a meal.`,
     ...(counted ? [`- A session with 0 coming gets no items.`] : []),
   ];

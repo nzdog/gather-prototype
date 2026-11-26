@@ -18,7 +18,9 @@ import {
   disposableItemWhere,
   planCategoryEmoji,
   planCategoryLabel,
+  relabelDraft,
   sectionsInPlanOrder,
+  sessionNamesOf,
   sweepEmptyGeneratedTeams,
   unplacedTotal,
   type UnplacedCount,
@@ -93,6 +95,13 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
         data: { aiCallsUsed: { increment: 1 } },
       });
     }
+
+    // [[GTC-482]] net 1 (the founder's ruling at the gate, 27 Nov 2026): with sessions in the
+    // prompt, no session label reaches a row or the screen; each becomes its session's name.
+    const relabelled =
+      sessionDayIds && promptInput.sessions
+        ? relabelDraft(result, sessionNamesOf(promptInput.sessions))
+        : null;
 
     const sections = Array.isArray(result.sections) ? result.sections : [];
     const dietaryCoverage = Array.isArray(result.dietaryCoverage) ? result.dietaryCoverage : [];
@@ -264,6 +273,11 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
         `[finalize-plan:full] event ${eventId}: ${unplacedTotal(unplaced)} drafted dish(es) matched no session (missing ${unplaced.missing}, unknown ${unplaced.unknown}, gone ${unplaced.gone}); kept on the whole event`
       );
     }
+    if (relabelled && relabelled.dishes + relabelled.jobs > 0) {
+      console.warn(
+        `[finalize-plan:full] event ${eventId}: ${relabelled.dishes} drafted dish(es) and ${relabelled.jobs} job(s) named a session by its label; each label replaced by its session's name`
+      );
+    }
 
     await recordBulkPlanChange(prisma, {
       eventId,
@@ -285,6 +299,8 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
               sessionDraft: {
                 sessions: Object.keys(sessionDayIds).length,
                 unplaced: unplacedTotal(unplaced),
+                relabelled: relabelled?.dishes ?? 0,
+                relabelledJobs: relabelled?.jobs ?? 0,
               },
             }
           : {}),
