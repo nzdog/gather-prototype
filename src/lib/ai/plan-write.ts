@@ -97,6 +97,39 @@ export function sectionsInPlanOrder<S extends { key?: string }>(sections: S[]): 
     .map(({ section }) => section);
 }
 
+/**
+ * [[GTC-482]] — A DRAFTED DISH'S SESSION, READ BACK (the founder's brief, 26 Nov 2026: "A dish whose
+ * label matches nothing is kept on 'whole event' and counted ... Never dropped, never guessed").
+ * The label is compared after trimming and in capitals ("s2 " is S2); "whole" is the whole event;
+ * anything else, or nothing, is the whole event and counted. The id comes only from `dayIds`, the
+ * map built from this event's own sessions, so a reply can never name another event's session.
+ */
+export type UnplacedReason = 'missing' | 'unknown' | 'gone';
+export type UnplacedCount = Record<UnplacedReason, number>;
+
+export function sessionOfLabel(
+  label: unknown,
+  dayIds: Record<string, string>
+): { dayId: string | null; unplaced: UnplacedReason | null } {
+  if (typeof label !== 'string' || label.trim() === '') return { dayId: null, unplaced: 'missing' };
+  const key = label.trim().toUpperCase();
+  if (key === 'WHOLE') return { dayId: null, unplaced: null };
+  const dayId = Object.prototype.hasOwnProperty.call(dayIds, key) ? dayIds[key] : undefined;
+  return dayId ? { dayId, unplaced: null } : { dayId: null, unplaced: 'unknown' };
+}
+
+/** [[GTC-482]]: the label a kept row is described by: its session's ("S2"), or "whole". */
+export function labelOfSession(dayId: string | null, dayIds: Record<string, string>): string {
+  if (!dayId) return 'whole';
+  const hit = Object.entries(dayIds).find(([, id]) => id === dayId);
+  return hit ? hit[0] : 'whole';
+}
+
+/** [[GTC-482]]: the dishes that matched no session, all reasons together. */
+export function unplacedTotal(c: UnplacedCount): number {
+  return c.missing + c.unknown + c.gone;
+}
+
 export async function applyPlanSections(
   tx: Tx,
   args: {
@@ -104,9 +137,11 @@ export async function applyPlanSections(
     sections: SectionResponse[];
     batchId: string;
     scopeTeamId?: string | null;
+    /** [[GTC-482]]: each session's label to its id, when sessions were in the prompt. */
+    sessionDayIds?: Record<string, string>;
   }
-): Promise<{ replaced: number; created: number }> {
-  const { eventId, sections, batchId, scopeTeamId } = args;
+): Promise<{ replaced: number; created: number; unplaced?: UnplacedCount }> {
+  const { eventId, sections, batchId, scopeTeamId, sessionDayIds } = args;
 
   // ITEM LEVEL, NEVER TEAM LEVEL. The statement this replaces was
   // `team.deleteMany({ eventId, source: 'GENERATED' })`, which reasoned about
@@ -117,6 +152,21 @@ export async function applyPlanSections(
     where: disposableItemWhere({ eventId, teamId: scopeTeamId, kind: 'ITEM' }),
   });
   const replaced = del.count;
+
+  // [[GTC-482]]: the belongs-to-this-event check, here inside the write: only this event's
+  // sessions that still exist. A session removed while the AI was answering puts its dishes on
+  // the whole event, counted.
+  const liveSessions = sessionDayIds
+    ? new Set(
+        (
+          await tx.day.findMany({
+            where: { eventId, id: { in: Object.values(sessionDayIds) } },
+            select: { id: true },
+          })
+        ).map((d) => d.id)
+      )
+    : null;
+  const unplaced: UnplacedCount = { missing: 0, unknown: 0, gone: 0 };
 
   let created = 0;
   // GTC-379: a new team is created in the questions' order. A team found by name keeps its place,
@@ -150,6 +200,13 @@ export async function applyPlanSections(
     });
     let nextDisplayOrder = (maxDisp._max.displayOrder ?? 0) + 1;
     for (const item of section.items) {
+      const placed = sessionDayIds ? sessionOfLabel(item.session, sessionDayIds) : null;
+      let dayId = placed?.dayId ?? null;
+      if (placed?.unplaced) unplaced[placed.unplaced]++;
+      else if (dayId && liveSessions && !liveSessions.has(dayId)) {
+        unplaced.gone++;
+        dayId = null;
+      }
       await tx.item.create({
         data: {
           // GTC-302: the name as stored — one leading article stripped, case untouched.
@@ -171,6 +228,7 @@ export async function applyPlanSections(
           displayOrder: nextDisplayOrder,
           dietaryTags:
             item.dietaryTags && item.dietaryTags.length > 0 ? item.dietaryTags : undefined,
+          ...(dayId ? { dayId } : {}),
         },
       });
       nextDisplayOrder++;
@@ -178,7 +236,7 @@ export async function applyPlanSections(
     }
   }
 
-  return { replaced, created };
+  return { replaced, created, ...(sessionDayIds ? { unplaced } : {}) };
 }
 
 export async function sweepEmptyGeneratedTeams(

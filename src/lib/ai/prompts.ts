@@ -553,6 +553,80 @@ export interface PlanGenerationCategoryInput {
   referenceItems: string[];
 }
 
+/**
+ * [[GTC-482]]: one session as the one call is told it. Never a database id: the label ("S1", "S2",
+ * ...) is what the reply names it by, and plan-input.ts maps it back.
+ */
+export interface PlanGenerationSessionInput {
+  label: string;
+  name: string;
+  /** "Fri 25 Dec"; empty when the session's name is only its date. */
+  date: string;
+  /** How many are coming; absent when the event's households name no one. */
+  coming?: number;
+  /** Given only when they add up to `coming`. */
+  adults?: number;
+  children?: number;
+}
+
+/**
+ * [[GTC-482]] — THE SESSIONS BLOCK (the founder's rulings of 26 Nov 2026: one call stays one call;
+ * each session its own small menu sized to its own headcount, from Moment 2's one set of answers;
+ * drinks, ice and nibbles on the whole event). Added to the user prompt only when there are
+ * sessions, so without them the prompt is byte for byte as before.
+ */
+function sessionsBlockFor(sessions: readonly PlanGenerationSessionInput[]): {
+  block: string;
+  labels: string;
+} {
+  const n = sessions.length;
+  const labels = n === 1 ? 'S1' : n === 2 ? 'S1 or S2' : `S1 to S${n}`;
+  const counted = sessions.every((s) => s.coming !== undefined);
+  const some = (k: number, one: string, many: string) => `${k} ${k === 1 ? one : many}`;
+  const lines = sessions.map((s) => {
+    const when = s.date ? `, ${s.date}` : '';
+    const split =
+      s.adults !== undefined && s.children !== undefined
+        ? ` (${some(s.adults, 'adult', 'adults')}, ${some(s.children, 'child', 'children')})`
+        : '';
+    const who = s.coming !== undefined ? `, ${s.coming} coming${split}` : '';
+    return `- ${s.label}: ${s.name}${when}${who}`;
+  });
+  const rules = [
+    `- Every item gets a "session": the label of the session it is eaten
+  at (${labels}), or "whole" for something bought once and used
+  across sessions (a stock of drinks, ice, snacks to graze on). Use
+  no other value.`,
+    ...(counted
+      ? [
+          `- Size each item for its own session's headcount, not the whole
+  event's.`,
+        ]
+      : []),
+    `- Kate's selections are for the event as a whole: put each where it
+  fits best (the main roasts at the main meal), not at every session.`,
+    `- Each session should make sense on its own as a meal of its kind. A
+  lighter session (a brunch, a leftovers dinner) needs fewer, simpler
+  items than the main meal. The plan size guidance is for one main
+  meal.`,
+    `- Never list the same item twice in one session. List an item in two
+  sessions only if it is really eaten at both; prefer a note
+  ("leftover ham from ${n >= 2 ? 'S2' : 'S1'}") to buying the same thing again.`,
+    `- Cover each dietary requirement at every session that has a meal.`,
+    ...(counted ? [`- A session with 0 coming gets no items.`] : []),
+  ];
+  return {
+    block: [
+      'SESSIONS (this event has more than one meal; plan each one):',
+      ...lines,
+      '',
+      'How to plan the sessions:',
+      ...rules,
+    ].join('\n'),
+    labels,
+  };
+}
+
 export interface PlanGenerationInput {
   eventType: string;
   totalAdults: number;
@@ -585,7 +659,11 @@ export interface PlanGenerationInput {
     name: string;
     quantity: string;
     notes?: string;
+    /** [[GTC-482]]: the kept row's session label ("S2" or "whole"), only when sessions are given. */
+    session?: string;
   }>;
+  /** [[GTC-482]]: the event's sessions, in order. Absent: no sessions block, as before. */
+  sessions?: PlanGenerationSessionInput[];
 }
 
 export function buildPlanGenerationPrompt(input: PlanGenerationInput): {
@@ -687,10 +765,18 @@ Return ONLY valid JSON in the exact shape specified. No prose, no markdown, no c
 ${preservable
   .map(
     (p) =>
-      `  - ${p.category}: ${p.name}${p.quantity ? ` (${p.quantity})` : ''}${p.notes ? ` — ${p.notes}` : ''}`
+      `  - ${p.session ? `${p.session}, ` : ''}${p.category}: ${p.name}${p.quantity ? ` (${p.quantity})` : ''}${p.notes ? ` — ${p.notes}` : ''}`
   )
   .join('\n')}`
       : '';
+
+  // [[GTC-482]]: the sessions, and the reply's one new field, only when there are sessions.
+  const sessionsPart =
+    input.sessions && input.sessions.length > 0 ? sessionsBlockFor(input.sessions) : null;
+  const dietaryTagsLine = sessionsPart
+    ? `"dietaryTags": string[],    // any of VEGETARIAN, VEGAN, GLUTEN_FREE, DAIRY_FREE, NUT_FREE — empty array when none apply
+          "session": string           // ${sessionsPart.labels}, or "whole" — see SESSIONS above`
+    : `"dietaryTags": string[]     // any of VEGETARIAN, VEGAN, GLUTEN_FREE, DAIRY_FREE, NUT_FREE — empty array when none apply`;
 
   const otherFoodBlock = input.otherNotes.trim()
     ? `Other food notes from Kate: ${input.otherNotes.trim()}`
@@ -723,7 +809,7 @@ ${categoryBlocks || '(none)'}
 ${skippedCategories.length > 0 ? `\nCategories Kate is still deciding on (skip these): ${skippedCategories.join(', ')}` : ''}
 ${preservableBlock ? '\n' + preservableBlock : ''}
 ${otherFoodBlock ? '\n' + otherFoodBlock : ''}
-${otherJobsBlock ? '\n' + otherJobsBlock : ''}
+${otherJobsBlock ? '\n' + otherJobsBlock : ''}${sessionsPart ? '\n\n' + sessionsPart.block : ''}
 
 Then produce three short auxiliary outputs in the same response:
 ${dietaryCoverageInstruction}
@@ -748,7 +834,7 @@ Return JSON in EXACTLY this shape:
           "notes": string,            // optional; omit if not needed
           "critical": boolean,        // see CRITICALITY above — 3-5 max across the whole plan
           "criticalReason": string,   // required when critical is true; null otherwise
-          "dietaryTags": string[]     // any of VEGETARIAN, VEGAN, GLUTEN_FREE, DAIRY_FREE, NUT_FREE — empty array when none apply
+          ${dietaryTagsLine}
         }
       ]
     }

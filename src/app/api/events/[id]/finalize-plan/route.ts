@@ -20,6 +20,8 @@ import {
   planCategoryLabel,
   sectionsInPlanOrder,
   sweepEmptyGeneratedTeams,
+  unplacedTotal,
+  type UnplacedCount,
 } from '@/lib/ai/plan-write';
 
 // GTC-145: lowered from 20 → 10. The single-call architecture fires exactly
@@ -59,7 +61,11 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
       );
     }
 
-    const { promptInput, bucketIsEligible } = await buildPlanGenerationInput(eventId, event, setup);
+    const { promptInput, bucketIsEligible, sessionDayIds } = await buildPlanGenerationInput(
+      eventId,
+      event,
+      setup
+    );
 
     const { system, user } = buildPlanGenerationPrompt(promptInput);
 
@@ -157,15 +163,20 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
       await createRevision(eventId, actor.id, 'Before re-running plan generation');
     }
 
+    // [[GTC-482]]: the dishes that matched no session, when sessions were in the prompt.
+    let unplaced: UnplacedCount | undefined;
+
     // GTC-237: one transaction over the whole write phase. Before this ticket the
     // delete and the creates were separate statements, so a failure part-way through
     // the create loop left the previous plan gone and the new one half-built.
     const taskCategories = await prisma.$transaction(async (tx) => {
-      await applyPlanSections(tx, {
+      const food = await applyPlanSections(tx, {
         eventId,
         sections: writtenSections,
         batchId,
+        sessionDayIds,
       });
+      unplaced = food.unplaced;
 
       // GTC-171 (B2): task rows. Moment 4 spec §6 — day-of choreography enters the plan
       // here, alongside the items, and is owned in Moment 3 through the same Assignment
@@ -247,6 +258,13 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
       return written;
     });
 
+    // [[GTC-482]]: a dish that matched no session is on the whole event; never dropped, and said here.
+    if (unplaced && unplacedTotal(unplaced) > 0) {
+      console.warn(
+        `[finalize-plan:full] event ${eventId}: ${unplacedTotal(unplaced)} drafted dish(es) matched no session (missing ${unplaced.missing}, unknown ${unplaced.unknown}, gone ${unplaced.gone}); kept on the whole event`
+      );
+    }
+
     await recordBulkPlanChange(prisma, {
       eventId,
       actor,
@@ -261,6 +279,15 @@ export async function POST(_request: NextRequest, context: { params: Promise<{ i
         categories: [...categories, ...taskCategories],
         dietaryCoverage,
         thingsToConsider,
+        // [[GTC-482]]: only when sessions were in the prompt, so without them the reply is as before.
+        ...(sessionDayIds && unplaced
+          ? {
+              sessionDraft: {
+                sessions: Object.keys(sessionDayIds).length,
+                unplaced: unplacedTotal(unplaced),
+              },
+            }
+          : {}),
       },
     });
   } catch (error) {

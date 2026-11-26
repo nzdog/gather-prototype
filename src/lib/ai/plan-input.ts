@@ -3,6 +3,7 @@ import type { EventSetup } from '@prisma/client';
 import type {
   PlanGenerationInput,
   PlanGenerationCategoryInput,
+  PlanGenerationSessionInput,
   OptionTreeSelections,
 } from '@/lib/ai/prompts';
 import {
@@ -20,6 +21,10 @@ import {
   type TaskResponse,
   isBucketEligible,
 } from '@/lib/ai/tasks';
+// [[GTC-482]]: the sessions, read only while the sessions switch is on.
+import { isSessionsOn } from '@/lib/sessions/switch';
+import { sessionHeadcounts } from '@/lib/sessions/answers';
+import { sessionDateKey, sessionDateWords, sortSessions } from '@/lib/sessions/dates';
 
 // GTC-236: extracted move-only from the finalize-plan route so the regenerate-plan route
 // builds its prompt input through the SAME assembly — one definition, no drift between
@@ -41,6 +46,8 @@ export interface SectionResponse {
     critical?: boolean;
     criticalReason?: string | null;
     dietaryTags?: string[];
+    /** [[GTC-482]]: the session's label ("S2") or "whole"; asked for only when sessions exist. */
+    session?: string;
   }>;
 }
 
@@ -110,6 +117,82 @@ export function synthesizeCategoryInput(
   };
 }
 
+/**
+ * [[GTC-482]] — THE SESSIONS FOR THE ONE CALL (the founder's rulings of 26 Nov 2026). Each session is
+ * given to the AI by a short label of its order ("S1", "S2", ...), never by its id; `dayIds` maps
+ * each label back, and the write checks each one again (plan-write.ts). The headcounts are counted
+ * from the same people as the event's own totals below (named people, kids by role CHILD, plus
+ * each household's little ones), less those marked as not at the session, by GTC-481's rule; the
+ * adults and children are given only when they add up to `sessionHeadcounts`' figure. When the
+ * households name no one (the event's count then comes from its guest count), no session carries
+ * a count. Pure, so the suite can hand it rows.
+ */
+export interface PlanSessions {
+  sessions: PlanGenerationSessionInput[];
+  dayIds: Record<string, string>;
+}
+
+export function planSessionsFrom(
+  days: readonly { id: string; name: string; date: Date | string; displayOrder: number }[],
+  households: readonly {
+    littleCount: number;
+    members: readonly { id: string; householdRole: string | null }[];
+  }[],
+  absences: readonly { personEventId: string; dayId: string }[]
+): PlanSessions {
+  const ordered = sortSessions(days);
+  const named = households.reduce((n, h) => n + h.members.length + (h.littleCount ?? 0), 0);
+  const heads = sessionHeadcounts(
+    ordered.map((d) => d.id),
+    households.map((h) => ({
+      littleCount: h.littleCount ?? 0,
+      people: h.members.map((m) => ({ personEventId: m.id })),
+    })),
+    absences
+  );
+  const dayIds: Record<string, string> = {};
+  const sessions = ordered.map((d, i): PlanGenerationSessionInput => {
+    const label = `S${i + 1}`;
+    dayIds[label] = d.id;
+    const words = sessionDateWords(sessionDateKey(d.date));
+    const base = { label, name: d.name, date: d.name.trim() === words ? '' : words };
+    if (named === 0) return base;
+    const away = new Set(absences.filter((a) => a.dayId === d.id).map((a) => a.personEventId));
+    let adults = 0;
+    let children = 0;
+    for (const h of households) {
+      const here = h.members.filter((m) => !away.has(m.id));
+      for (const m of here) {
+        if (m.householdRole === 'CHILD') children++;
+        else adults++;
+      }
+      if (!(h.members.length > 0 && here.length === 0)) children += h.littleCount ?? 0;
+    }
+    const coming = heads[d.id] ?? 0;
+    return adults + children === coming
+      ? { ...base, coming, adults, children }
+      : { ...base, coming };
+  });
+  return { sessions, dayIds };
+}
+
+async function readPlanSessions(
+  eventId: string,
+  households: Parameters<typeof planSessionsFrom>[1]
+): Promise<PlanSessions | null> {
+  const days = await prisma.day.findMany({
+    where: { eventId },
+    select: { id: true, name: true, date: true, displayOrder: true },
+  });
+  if (days.length === 0) return null;
+  // Both ends on this event, as the sessions route reads them.
+  const absences = await prisma.sessionAbsence.findMany({
+    where: { day: { eventId }, personEvent: { eventId } },
+    select: { personEventId: true, dayId: true },
+  });
+  return planSessionsFrom(days, households, absences);
+}
+
 export async function buildPlanGenerationInput(
   eventId: string,
   event: { guestCount: number | null },
@@ -118,6 +201,8 @@ export async function buildPlanGenerationInput(
   promptInput: PlanGenerationInput;
   bucketSources: Record<TaskBucket, OtherJobsField>;
   bucketIsEligible: (key: TaskBucket) => boolean;
+  /** [[GTC-482]]: each session's label to its id; present only when sessions went in the prompt. */
+  sessionDayIds?: Record<string, string>;
 }> {
   const eventType = setup.eventType ?? 'Other';
 
@@ -133,11 +218,14 @@ export async function buildPlanGenerationInput(
   // Headcount from households
   let totalAdults = 0;
   let totalKids = 0;
+  // [[GTC-482]]: the same households, kept for the sessions' headcounts.
+  let householdsRead: Parameters<typeof planSessionsFrom>[1] = [];
   try {
     const households = await prisma.household.findMany({
       where: { eventId },
       include: { members: true },
     });
+    householdsRead = households;
     for (const h of households) {
       for (const m of h.members) {
         if (m.householdRole === 'CHILD') {
@@ -229,6 +317,10 @@ export async function buildPlanGenerationInput(
   };
   const bucketIsEligible = (key: TaskBucket): boolean => isBucketEligible(bucketSources[key]);
 
+  // [[GTC-482]]: with the switch on and sessions on the event, the one call is told them. With
+  // the switch off, or no session, nothing more is read and nothing is added.
+  const planSessions = isSessionsOn() ? await readPlanSessions(eventId, householdsRead) : null;
+
   return {
     promptInput: {
       eventType,
@@ -241,8 +333,10 @@ export async function buildPlanGenerationInput(
       setUpNotes: (setUpData?.freeText ?? '').trim(),
       cleanUpNotes: (cleanUpData?.freeText ?? '').trim(),
       otherJobsNotes: (otherJobsData?.freeText ?? '').trim(),
+      ...(planSessions ? { sessions: planSessions.sessions } : {}),
     },
     bucketSources,
     bucketIsEligible,
+    ...(planSessions ? { sessionDayIds: planSessions.dayIds } : {}),
   };
 }
