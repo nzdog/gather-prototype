@@ -16,9 +16,10 @@ const SAMPLE_PAGE = '/demo/new';
 const UNDER_CONSTRUCTION = 'Under construction';
 /**
  * [[GTC-486]] D (founder, 26 Nov 2026): "one line only, under the Gather heading and above the
- * button". His campaign line, with the page's own apostrophe (the explainer's).
+ * button". His campaign line, with the page's own apostrophe (the explainer's). Its words are the
+ * founder's ruling of 27 Nov 2026, replacing "You’re onto it. Finally, you can show them."
  */
-const LEAD = 'You’re onto it. Finally, you can show them.';
+const LEAD = 'Because those potatoes won’t bring themselves to lunch.';
 /** [[GTC-486]] A, wording A1 (founder, 26 Nov 2026): the line under the button. */
 const START_LINE = 'Start your own sample event. Nothing is sent to anyone.';
 

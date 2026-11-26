@@ -11,6 +11,10 @@
  *      you can show them."
  *   B and C are not in this ticket. No price on /demo.
  *
+ * And of 27 Nov 2026: the line under the heading now reads exactly "Because those potatoes won't
+ * bring themselves to lunch.", replacing D's words, with the curly apostrophe; nothing else on the
+ * page changes.
+ *
  * Ruling E (the sample's start page counted as a fourth page) is held by tests/page-visit-test.ts
  * (U6, S9, S10); the privacy page's words by tests/privacy-words-test.ts.
  *
@@ -52,8 +56,13 @@ const EXPLAINER = 'src/components/demo/DemoExplainer.tsx';
 const BUTTON = 'src/components/demo/TryItYourselfButton.tsx';
 
 // ── The ruled words (26 Nov 2026) ────────────────────────────────────────────────────────────
-/** D. Drawn with the page's own apostrophe (’), as the explainer under it is written. */
-const LEAD = 'You’re onto it. Finally, you can show them.';
+/**
+ * D, in the words of the founder's ruling of 27 Nov 2026. Drawn with the page's own apostrophe
+ * (’), as the explainer under it is written.
+ */
+const LEAD = 'Because those potatoes won’t bring themselves to lunch.';
+/** D's words of 26 Nov 2026, replaced on 27 Nov: in no file under src. */
+const OLD_LEAD = 'You’re onto it. Finally, you can show them.';
 /** A1, under the button. */
 const START_LINE = 'Start your own sample event. Nothing is sent to anyone.';
 /** A1, the intro. */
@@ -222,12 +231,15 @@ const CHECKS: Check[] = [
   // W — the words.
   {
     layer: 'W',
-    label: `W1 D: the line under the heading reads, once, in the page's own constant: "${LEAD}"`,
+    label: `W1 D: the line under the heading reads, once, in the page's own constant: "${LEAD}"; the old words in no code under src`,
     test: (i) =>
       count(codeOnly(i.page), `const LEAD = '${LEAD}';`) === 1 &&
       Object.entries(i.src).filter(([, s]) => s.includes(LEAD)).length === 1 &&
-      count(i.page, LEAD) === 1,
-    breakIt: (i) => edit(i, 'page', LEAD, 'You’re onto it. Finally you can show them.'),
+      count(i.page, LEAD) === 1 &&
+      !Object.values(i.src).some((s) => codeOnly(s).includes(OLD_LEAD)),
+    // The straight apostrophe in place of the ruled curly one.
+    breakIt: (i) =>
+      edit(i, 'page', LEAD, 'Because those potatoes won' + "'" + 't bring themselves to lunch.'),
   },
   {
     layer: 'W',
