@@ -748,8 +748,8 @@ async function main() {
   const decode = (s: string) =>
     s
       .replace(/&#x27;/g, "'")
-      .replace(/&amp;/g, '&')
-      .replace(/&quot;/g, '"');
+      .replace(/&quot;/g, '"')
+      .replace(/&amp;/g, '&');
   const many = decode(empty('2026-12-24', '2026-12-26'));
   const single = decode(empty('2026-12-23', '2026-12-23'));
   const CW = W?.CARD_WORDS ?? {};
