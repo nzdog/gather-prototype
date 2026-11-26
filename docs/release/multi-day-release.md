@@ -44,7 +44,8 @@ them. The count below says how many there are.
    last one before a release. Turning the switch on writes nothing by
    itself, so this is a precaution, not a step the release needs.
 
-   Its name and time: [FILL]
+   Its name and time: manual backup "2026-11-26 17:52", 1.46 GB, on
+   Postgres-33NH's Backups tab.
 
 2. **The read-only count.** Run this from the repo folder, on your own
    connection to production's database (one line):
@@ -53,17 +54,24 @@ them. The count below says how many there are.
    psql "<your production connection>" -f docs/release/multi-day-release-count.sql
    ```
 
-   It opens a read-only transaction (the database refuses any write in
-   it) and ends by rolling back. It prints one row of four numbers:
+   Production's database has no public address, so the line above
+   cannot reach it. Run it in Railway's Console on Postgres-33NH
+   instead: `psql`, then the query from
+   `docs/release/multi-day-release-count.sql` pasted. That is how it
+   was run on 26 Nov 2026.
 
-   - `events_with_sessions`: [FILL]. Events that already hold sessions.
+   It opens a read-only transaction (the database refuses any write in
+   it) and ends by rolling back. It prints one row of four numbers. On
+   production, 26 Nov 2026, about 16:14:
+
+   - `events_with_sessions`: 0. Events that already hold sessions.
      If not 0, ask Claude for the second read-only query that lists
      them (name, dates, sent or not) and look before you turn on.
-   - `events_with_not_coming_marks`: [FILL]. Should be 0. Nothing writes
+   - `events_with_not_coming_marks`: 0. Should be 0. Nothing writes
      these while the switch is off. **If it is not 0, stop.**
-   - `unsent_events_over_more_than_one_date`: [FILL]. Their invitation
+   - `unsent_events_over_more_than_one_date`: 1. Their invitation
      will name the range when sent (unless the host saved a line).
-   - `sent_multi_date_still_ahead_without_own_line`: [FILL]. Sent events
+   - `sent_multi_date_still_ahead_without_own_line`: 0. Sent events
      where a guest asked later gets the range line.
 
 ## 3. Turn it on: staging first
@@ -76,7 +84,11 @@ them. The count below says how many there are.
    Claude cannot see Railway, so go by what it shows. The switch is on
    once that deployment is live.
 
-Time turned on, staging: [FILL]
+   On 26 Nov 2026 Railway held the new variable in an "Apply 1 change"
+   bar, and pressing Deploy there deployed it. "Redeploy" on the old
+   deployment does not pick up the new variable.
+
+Time turned on, staging: 26 Nov 2026, about 16:27.
 
 ## 4. Check staging by hand, on your phone
 
@@ -99,7 +111,7 @@ Anything wrong: turn it off (section 6) and tell Claude what you saw.
 2. On one of your own events: the first three checks of section 4.
 3. The board of a sent event: as it was.
 
-Time turned on, production: [FILL]
+Time turned on, production: 26 Nov 2026, 17:55.
 
 ## 6. Turn it off again: one step
 
