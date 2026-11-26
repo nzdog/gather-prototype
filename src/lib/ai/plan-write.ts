@@ -191,8 +191,8 @@ function relabelValue(value: unknown, names: Record<string, string>): unknown {
 
 /**
  * NET 1 over a whole reply, in place, before anything reads it: every text of each drafted dish
- * but its "session", each job, and the coverage and reminders the screen shows next. Returns how
- * many dishes and jobs it changed.
+ * but its "session", each job, and the coverage and the things to consider that the screen shows
+ * next. Returns how many dishes and jobs it changed.
  */
 export function relabelDraft(
   reply: {
