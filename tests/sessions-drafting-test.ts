@@ -94,6 +94,9 @@ const gitOk = (args: string[]) => git(args) !== null;
 const atMain = (rel: string) => git(['show', `${MAIN}:${rel}`]) ?? '';
 const sha = (s: string) => createHash('sha256').update(s).digest('hex');
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
+/** The same dishes in the same sessions, whatever order the plan lists them in. */
+const sameByName = (a: Record<string, string>, b: Record<string, string>) =>
+  same(Object.entries(a).sort(), Object.entries(b).sort());
 const count = (s: string, needle: string) => (needle ? s.split(needle).length - 1 : 0);
 
 // ── The two stand-ins, set before any route is loaded ───────────────────────────────────────
@@ -917,7 +920,7 @@ async function main() {
       'F1',
       'a good reply: every dish in its session (" s3 " read as S3), "whole" on the whole event, nothing counted, no log line',
       r5.status === 200 &&
-        same(got, {
+        sameByName(got, {
           'Glazed ham': 'S2',
           'Roast lamb': 'S2',
           Sausages: 'S1',
