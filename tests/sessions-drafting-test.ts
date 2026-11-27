@@ -51,6 +51,17 @@ import { installProviderTrap, trapCount } from './helpers/provider-trap';
 const ROOT = path.join(__dirname, '..');
 const TAG = `S482${Date.now().toString(36)}`;
 const MAIN = 'c8b9b42'; // origin/main when GTC-482 began (the merge of GTC-483)
+/**
+ * ⚠ [[GTC-482]] [[GTC-486]] (27 Nov 2026, the founder's word on bringing main in: "one tests
+ * commit moving each red check the narrowest way, with a dated note naming GTC-482 and GTC-486").
+ * Main as it then was (b7f3e76, GTC-486's two merges) is merged into this branch. GTC-486 edits
+ * five other source files and adds its own script line, so K6 ("the edited source files are
+ * exactly the five") and K9 ("package.json gains exactly one line") compare the working folder
+ * with main as merged in (MERGED_MAIN) instead of with c8b9b42. They still read the working
+ * folder, so a later edit still turns them red. Every other check still compares with c8b9b42,
+ * package-lock.json among them.
+ */
+const MERGED_MAIN = 'b7f3e76';
 const VAR = 'GATHER_SESSIONS';
 const FIXTURE_FILE =
   process.env.GTC482_FIXTURE_FILE ?? path.join(os.tmpdir(), `gtc482-drafting-${TAG}.json`);
@@ -1583,7 +1594,8 @@ async function main() {
       { sha: sha(read(file)), numstat: `${numstat[0]} ${numstat[1]}` }
     );
   }
-  const changed = (git(['diff', '--name-only', MAIN, '--', 'src']) ?? 'x')
+  // [[GTC-486]]: against main as merged in (MERGED_MAIN); see the note there.
+  const changed = (git(['diff', '--name-only', MERGED_MAIN, '--', 'src']) ?? 'x')
     .split('\n')
     .filter(Boolean)
     .sort();
@@ -1613,7 +1625,8 @@ async function main() {
     'no new route: the route files are c8b9b42’s',
     routesAt(null).length > 100 && same(routesAt(null), routesAt(MAIN))
   );
-  const pkgDiff = (git(['diff', '-U0', '--no-color', MAIN, '--', 'package.json']) ?? '')
+  // [[GTC-486]]: against main as merged in (MERGED_MAIN); see the note there.
+  const pkgDiff = (git(['diff', '-U0', '--no-color', MERGED_MAIN, '--', 'package.json']) ?? '')
     .split('\n')
     .filter((l) => /^[+-]/.test(l) && !/^(\+\+\+|---)/.test(l));
   check(
