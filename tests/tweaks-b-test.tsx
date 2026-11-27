@@ -33,6 +33,7 @@ import { installProviderTrap } from './helpers/provider-trap';
 import Moment1InputForm from '../src/components/plan/Moment1InputForm';
 import * as HOST_CARD_MODULE from '../src/components/shared/HostCard';
 import * as INVITES_ONLY from '../src/lib/setup/invites-only';
+import { withoutGtc487PlanView } from './helpers/gtc487-plan-view-changes';
 
 installProviderTrap();
 
@@ -502,6 +503,13 @@ const GTC480_MOMENT2_ADDED: string[] = [
     '',
   ].join('\n') + '\n',
 ];
+/*
+ * ⚠ [[GTC-487]] (28 Nov 2026, the founder's word on its plan: "yes to all 13 moves as you describe
+ * them, each the narrowest way with a dated note naming GTC-487"). GTC-487 makes sixteen named
+ * changes to Moment 2's plan view (B, D and E), listed in full in
+ * tests/helpers/gtc487-plan-view-changes.ts. They are taken back first, each required exactly once;
+ * then GTC-480's insertions as before, and the rest byte for byte.
+ */
 const withoutGtc480 = (text: string): string => {
   if (GTC480_MOMENT2_ADDED.some((hunk) => text.split(hunk).length !== 2)) {
     return 'a GTC-480 insertion is missing, repeated or changed';
@@ -538,8 +546,8 @@ function layerP() {
   );
   assert(
     'P',
-    'P6 the plan view is Ticket A’s file with only the four classes changed: styling only (but for GTC-480’s eleven named insertions, each exactly once)',
-    CHECKS.exactly(withoutGtc480(plan), planExpected(atRef(A_TIP, PLAN)))
+    'P6 the plan view is Ticket A’s file with only the four classes changed: styling only (but for GTC-480’s eleven named insertions and GTC-487’s sixteen named changes, each exactly once)',
+    CHECKS.exactly(withoutGtc480(withoutGtc487PlanView(plan)), planExpected(atRef(A_TIP, PLAN)))
   );
 }
 

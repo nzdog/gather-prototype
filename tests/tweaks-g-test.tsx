@@ -40,6 +40,7 @@ import * as ReactAll from 'react';
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { transformSync } from 'esbuild';
+import { withoutGtc487PlanView } from './helpers/gtc487-plan-view-changes';
 
 const ROOT = path.join(__dirname, '..');
 
@@ -607,6 +608,13 @@ function layerP(island: string, islandBase: string) {
       '',
     ].join('\n') + '\n',
   ];
+  /*
+   * ⚠ [[GTC-487]] (28 Nov 2026, the founder's word on its plan: "yes to all 13 moves as you describe
+   * them, each the narrowest way with a dated note naming GTC-487"). GTC-487 makes sixteen named
+   * changes to Moment 2's plan view (B, D and E), listed in full in
+   * tests/helpers/gtc487-plan-view-changes.ts. They are taken back first, each required exactly once;
+   * then GTC-480's insertions as before, and the rest byte for byte.
+   */
   const withoutGtc480 = (text: string): string => {
     if (GTC480_MOMENT2_ADDED.some((hunk) => text.split(hunk).length !== 2)) {
       return 'a GTC-480 insertion is missing, repeated or changed';
@@ -619,7 +627,7 @@ function layerP(island: string, islandBase: string) {
         f === OLD_DASHBOARD
           ? withoutGtc475(read(f))
           : f === MOMENT2
-            ? withoutGtc480(read(f))
+            ? withoutGtc480(withoutGtc487PlanView(read(f)))
             : read(f),
         atRef(f === BOARD ? CODE_H : BASE, f)
       ) ||
