@@ -97,6 +97,151 @@ export function sectionsInPlanOrder<S extends { key?: string }>(sections: S[]): 
     .map(({ section }) => section);
 }
 
+/**
+ * [[GTC-482]] — A DRAFTED DISH'S SESSION, READ BACK (the founder's brief, 26 Nov 2026: "A dish whose
+ * label matches nothing is kept on 'whole event' and counted ... Never dropped, never guessed").
+ * The label is compared after trimming and in capitals ("s2 " is S2); "whole" is the whole event;
+ * anything else, or nothing, is the whole event and counted. The id comes only from `dayIds`, the
+ * map built from this event's own sessions, so a reply can never name another event's session.
+ */
+export type UnplacedReason = 'missing' | 'unknown' | 'gone';
+export type UnplacedCount = Record<UnplacedReason, number>;
+
+export function sessionOfLabel(
+  label: unknown,
+  dayIds: Record<string, string>
+): { dayId: string | null; unplaced: UnplacedReason | null } {
+  if (typeof label !== 'string' || label.trim() === '') return { dayId: null, unplaced: 'missing' };
+  const key = label.trim().toUpperCase();
+  if (key === 'WHOLE') return { dayId: null, unplaced: null };
+  const dayId = Object.prototype.hasOwnProperty.call(dayIds, key) ? dayIds[key] : undefined;
+  return dayId ? { dayId, unplaced: null } : { dayId: null, unplaced: 'unknown' };
+}
+
+/** [[GTC-482]]: the label a kept row is described by: its session's ("S2"), or "whole". */
+export function labelOfSession(dayId: string | null, dayIds: Record<string, string>): string {
+  if (!dayId) return 'whole';
+  const hit = Object.entries(dayIds).find(([, id]) => id === dayId);
+  return hit ? hit[0] : 'whole';
+}
+
+/** [[GTC-482]]: the dishes that matched no session, all reasons together. */
+export function unplacedTotal(c: UnplacedCount): number {
+  return c.missing + c.unknown + c.gone;
+}
+
+/**
+ * [[GTC-482]] NET 1 — LABELS NEVER REACH A ROW (the founder's ruling at the decision gate, 27 Nov
+ * 2026). The labels are the prompt's shorthand; a host or a guest knows a session by its name. In
+ * a drafted text, each of this event's labels (S1 to Sn, as a whole word, in any case) is replaced
+ * by its session's name, and a label written beside its own session's name ("Christmas lunch S2",
+ * "S2 (Christmas lunch)") simply goes, so the name is not said twice. A label this event does not
+ * have ("S9" of five) is left as written. Used only when the sessions block was in the prompt.
+ */
+export function sessionNamesOf(
+  sessions: readonly { label: string; name: string }[]
+): Record<string, string> {
+  return Object.fromEntries(sessions.map((s) => [s.label, s.name]));
+}
+
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/** A session's name and its first or last words ("Christmas evening", "evening", "Christmas"). */
+function nameParts(name: string): string[] {
+  const words = name.trim().split(/\s+/);
+  const parts = new Set<string>();
+  for (let i = 0; i < words.length; i++) parts.add(words.slice(i).join(' '));
+  for (let j = words.length - 1; j > 0; j--) parts.add(words.slice(0, j).join(' '));
+  return [...parts].sort((a, b) => b.length - a.length);
+}
+
+export function relabelText(text: string, names: Record<string, string>): string {
+  let out = text;
+  // The longest label first, so "S12" is never read as "S1".
+  for (const label of Object.keys(names).sort((a, b) => b.length - a.length)) {
+    const name = names[label];
+    if (!name) continue;
+    const l = escapeRegExp(label);
+    // The label beside its own session's name, or part of it ("S3 evening", "lunch S2",
+    // "Christmas lunch (S2)"), becomes the name once; a label alone becomes the name.
+    const alt = nameParts(name)
+      .map((p) => p.split(/\s+/).map(escapeRegExp).join('\\s+'))
+      .join('|');
+    const to = () => name;
+    out = out
+      .replace(new RegExp(`\\b(?:${alt})\\s*[(\\[]\\s*${l}\\s*[)\\]]`, 'gi'), to)
+      .replace(new RegExp(`\\b${l}\\b\\s*[(\\[]\\s*(?:${alt})\\s*[)\\]]`, 'gi'), to)
+      .replace(new RegExp(`\\b(?:${alt})[\\s,:–—-]*\\b${l}\\b`, 'gi'), to)
+      .replace(new RegExp(`\\b${l}\\b[\\s,:–—-]*(?:${alt})\\b`, 'gi'), to)
+      .replace(new RegExp(`\\b${l}\\b`, 'gi'), to);
+  }
+  return out;
+}
+
+function relabelValue(value: unknown, names: Record<string, string>): unknown {
+  if (typeof value === 'string') return relabelText(value, names);
+  if (Array.isArray(value)) return value.map((v) => relabelValue(v, names));
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([k, v]) => [k, k === 'session' ? v : relabelValue(v, names)])
+    );
+  }
+  return value;
+}
+
+/**
+ * NET 1 over a whole reply, in place, before anything reads it: every text of each drafted dish
+ * but its "session", each job, and the coverage and the things to consider that the screen shows
+ * next. Returns how many dishes and jobs it changed.
+ */
+export function relabelDraft(
+  reply: {
+    sections?: unknown;
+    tasks?: unknown;
+    dietaryCoverage?: unknown;
+    thingsToConsider?: unknown;
+  },
+  names: Record<string, string>
+): { dishes: number; jobs: number } {
+  const changed = (a: unknown, b: unknown) => JSON.stringify(a) !== JSON.stringify(b);
+  let dishes = 0;
+  let jobs = 0;
+  if (Array.isArray(reply.sections)) {
+    for (const section of reply.sections) {
+      if (!section || !Array.isArray(section.items)) continue;
+      section.items = section.items.map((item: unknown) => {
+        const next = relabelValue(item, names);
+        if (changed(item, next)) dishes++;
+        return next;
+      });
+    }
+  }
+  if (Array.isArray(reply.tasks)) {
+    reply.tasks = reply.tasks.map((task: unknown) => {
+      const next = relabelValue(task, names);
+      if (changed(task, next)) jobs++;
+      return next;
+    });
+  }
+  if (Array.isArray(reply.dietaryCoverage)) {
+    reply.dietaryCoverage = relabelValue(reply.dietaryCoverage, names);
+  }
+  if (Array.isArray(reply.thingsToConsider)) {
+    reply.thingsToConsider = relabelValue(reply.thingsToConsider, names);
+  }
+  return { dishes, jobs };
+}
+
+/**
+ * [[GTC-482]] NET 2 — NO TWIN OF A KEPT DISH (the founder's ruling at the decision gate, 27 Nov
+ * 2026). In a regenerate, a drafted dish with the same name (case and spaces aside), category and
+ * session as a row being kept is not written, and is counted. Used only when the sessions block was
+ * in the prompt; without it every drafted dish is written, as before.
+ */
+export function twinKey(name: string, teamName: string, dayId: string | null): string {
+  return `${name.toLowerCase().replace(/\s+/g, '')}|${teamName}|${dayId ?? ''}`;
+}
+
 export async function applyPlanSections(
   tx: Tx,
   args: {
@@ -104,9 +249,13 @@ export async function applyPlanSections(
     sections: SectionResponse[];
     batchId: string;
     scopeTeamId?: string | null;
+    /** [[GTC-482]]: each session's label to its id, when sessions were in the prompt. */
+    sessionDayIds?: Record<string, string>;
+    /** [[GTC-482]] net 2: the rows a regenerate keeps, when sessions were in the prompt. */
+    keptRows?: readonly { name: string; teamName: string; dayId: string | null }[];
   }
-): Promise<{ replaced: number; created: number }> {
-  const { eventId, sections, batchId, scopeTeamId } = args;
+): Promise<{ replaced: number; created: number; unplaced?: UnplacedCount; twins?: number }> {
+  const { eventId, sections, batchId, scopeTeamId, sessionDayIds, keptRows } = args;
 
   // ITEM LEVEL, NEVER TEAM LEVEL. The statement this replaces was
   // `team.deleteMany({ eventId, source: 'GENERATED' })`, which reasoned about
@@ -117,6 +266,23 @@ export async function applyPlanSections(
     where: disposableItemWhere({ eventId, teamId: scopeTeamId, kind: 'ITEM' }),
   });
   const replaced = del.count;
+
+  // [[GTC-482]]: the belongs-to-this-event check, here inside the write: only this event's
+  // sessions that still exist. A session removed while the AI was answering puts its dishes on
+  // the whole event, counted.
+  const liveSessions = sessionDayIds
+    ? new Set(
+        (
+          await tx.day.findMany({
+            where: { eventId, id: { in: Object.values(sessionDayIds) } },
+            select: { id: true },
+          })
+        ).map((d) => d.id)
+      )
+    : null;
+  const unplaced: UnplacedCount = { missing: 0, unknown: 0, gone: 0 };
+  const kept = keptRows ? new Set(keptRows.map((k) => twinKey(k.name, k.teamName, k.dayId))) : null;
+  let twins = 0;
 
   let created = 0;
   // GTC-379: a new team is created in the questions' order. A team found by name keeps its place,
@@ -150,10 +316,23 @@ export async function applyPlanSections(
     });
     let nextDisplayOrder = (maxDisp._max.displayOrder ?? 0) + 1;
     for (const item of section.items) {
+      const placed = sessionDayIds ? sessionOfLabel(item.session, sessionDayIds) : null;
+      let dayId = placed?.dayId ?? null;
+      let reason = placed?.unplaced ?? null;
+      if (!reason && dayId && liveSessions && !liveSessions.has(dayId)) {
+        reason = 'gone';
+        dayId = null;
+      }
+      const storedName = itemNameForStorage(item.name) ?? item.name;
+      if (kept && kept.has(twinKey(storedName, label, dayId))) {
+        twins++;
+        continue;
+      }
+      if (reason) unplaced[reason]++;
       await tx.item.create({
         data: {
           // GTC-302: the name as stored — one leading article stripped, case untouched.
-          name: itemNameForStorage(item.name) ?? item.name,
+          name: storedName,
           teamId: team.id,
           quantityAmount: item.quantity,
           quantityUnit: 'CUSTOM',
@@ -171,6 +350,7 @@ export async function applyPlanSections(
           displayOrder: nextDisplayOrder,
           dietaryTags:
             item.dietaryTags && item.dietaryTags.length > 0 ? item.dietaryTags : undefined,
+          ...(dayId ? { dayId } : {}),
         },
       });
       nextDisplayOrder++;
@@ -178,7 +358,12 @@ export async function applyPlanSections(
     }
   }
 
-  return { replaced, created };
+  return {
+    replaced,
+    created,
+    ...(sessionDayIds ? { unplaced } : {}),
+    ...(kept ? { twins } : {}),
+  };
 }
 
 export async function sweepEmptyGeneratedTeams(

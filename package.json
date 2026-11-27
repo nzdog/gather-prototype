@@ -224,7 +224,8 @@
     "test:sessions-guests-clock": "tsx --tsconfig tests/tsconfig.json tests/sessions-guests-clock-test.tsx",
     "test:sessions-guest-answers": "tsx --tsconfig tests/tsconfig.json tests/sessions-guest-answers-test.tsx",
     "test:sessions-release": "tsx --tsconfig tests/tsconfig.json tests/sessions-release-test.tsx",
-    "test:demo-entry": "tsx --tsconfig tests/tsconfig.json tests/demo-entry-test.tsx"
+    "test:demo-entry": "tsx --tsconfig tests/tsconfig.json tests/demo-entry-test.tsx",
+    "test:sessions-drafting": "tsx --tsconfig tests/tsconfig.json tests/sessions-drafting-test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

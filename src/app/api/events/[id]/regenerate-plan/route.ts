@@ -19,7 +19,11 @@ import { createRevision } from '@/lib/workflow';
 import {
   applyPlanSections,
   disposableItemWhere,
+  labelOfSession,
+  relabelDraft,
+  sessionNamesOf,
   sweepEmptyGeneratedTeams,
+  unplacedTotal,
 } from '@/lib/ai/plan-write';
 
 // GTC-236: V2 regenerate. One Claude call per invocation, same budget pool and limit as
@@ -177,7 +181,7 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
     );
 
     // Build the prompt through the SAME assembly as finalize-plan.
-    const { promptInput } = await buildPlanGenerationInput(eventId, event, setup);
+    const { promptInput, sessionDayIds } = await buildPlanGenerationInput(eventId, event, setup);
 
     let engagedCategories = promptInput.engagedCategories;
     if (scope === 'category') {
@@ -213,6 +217,8 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         name: i.name,
         quantity: formatQuantity(i),
         notes: i.notes ?? undefined,
+        // [[GTC-482]]: each kept row's session, so the redraft goes around it in the right one.
+        ...(sessionDayIds ? { session: labelOfSession(i.dayId, sessionDayIds) } : {}),
       })),
     });
 
@@ -225,6 +231,13 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       callSiteLabel: `regenerate-plan:${scope}`,
     });
 
+    // [[GTC-482]] net 1 (the founder's ruling at the gate, 27 Nov 2026): with sessions in the
+    // prompt, no session label reaches a row; each becomes its session's name.
+    const relabelled =
+      sessionDayIds && promptInput.sessions
+        ? relabelDraft(result, sessionNamesOf(promptInput.sessions))
+        : null;
+
     let sections = (Array.isArray(result.sections) ? result.sections : []).filter(
       (s) => s && Array.isArray(s.items) && s.items.length > 0
     );
@@ -235,16 +248,26 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
 
     const batchId = `m2-regen-${Date.now()}`;
 
-    const { replaced, created } = await prisma.$transaction(async (tx) => {
+    const { replaced, created, unplaced, twins } = await prisma.$transaction(async (tx) => {
       // GTC-237: delete-and-recreate now lives in `applyPlanSections`, one definition
       // shared with finalize-plan. What moved out of this route is exactly what
       // finalize-plan was missing: item-level clearing, find-or-create by canonical
       // label, and append-after-survivors ordering.
-      const { replaced: del, created: createdCount } = await applyPlanSections(tx, {
+      const {
+        replaced: del,
+        created: createdCount,
+        unplaced: notPlaced,
+        twins: notWritten,
+      } = await applyPlanSections(tx, {
         eventId,
         sections,
         batchId,
         scopeTeamId: targetTeamId,
+        sessionDayIds,
+        // [[GTC-482]] net 2: with sessions in the prompt, no twin of a row being kept is written.
+        keptRows: sessionDayIds
+          ? preservedItems.map((i) => ({ name: i.name, teamName: i.team.name, dayId: i.dayId }))
+          : undefined,
       });
 
       // Sweep GENERATED teams in scope left empty — per-team deletes, never an unscoped
@@ -283,8 +306,25 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
         ],
       });
 
-      return { replaced: del, created: createdCount };
+      return { replaced: del, created: createdCount, unplaced: notPlaced, twins: notWritten };
     });
+
+    // [[GTC-482]]: a dish that matched no session is on the whole event; never dropped, and said here.
+    if (unplaced && unplacedTotal(unplaced) > 0) {
+      console.warn(
+        `[regenerate-plan:${scope}] event ${eventId}: ${unplacedTotal(unplaced)} drafted dish(es) matched no session (missing ${unplaced.missing}, unknown ${unplaced.unknown}, gone ${unplaced.gone}); kept on the whole event`
+      );
+    }
+    if (relabelled && relabelled.dishes > 0) {
+      console.warn(
+        `[regenerate-plan:${scope}] event ${eventId}: ${relabelled.dishes} drafted dish(es) named a session by its label; each label replaced by its session's name`
+      );
+    }
+    if (twins) {
+      console.warn(
+        `[regenerate-plan:${scope}] event ${eventId}: ${twins} drafted dish(es) twinned a row being kept (same name, category and session); not written`
+      );
+    }
 
     return NextResponse.json({
       preservedCount: preservedItems.length,
@@ -292,6 +332,17 @@ export async function POST(request: NextRequest, context: { params: Promise<{ id
       createdCount: created,
       scope,
       categoryKey: categoryKey ?? null,
+      // [[GTC-482]]: only when sessions were in the prompt, so without them the reply is as before.
+      ...(sessionDayIds && unplaced
+        ? {
+            sessionDraft: {
+              sessions: Object.keys(sessionDayIds).length,
+              unplaced: unplacedTotal(unplaced),
+              relabelled: relabelled?.dishes ?? 0,
+              twins: twins ?? 0,
+            },
+          }
+        : {}),
     });
   } catch (error) {
     return NextResponse.json(

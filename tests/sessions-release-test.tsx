@@ -48,6 +48,10 @@ const BASE = '2c9771b'; // origin/main when GTC-483 began (the merge of GTC-481)
  * script line, so those two checks read the tree as GTC-483 merged it (MERGED, the merge of pull
  * request #125) instead of the working folder: they still prove exactly what GTC-483 did. Every
  * other check here still reads the working folder.
+ * [[GTC-482]] needed the same move, for its own five source files and its own script line (the
+ * founder's rulings on its plan, 26 Nov 2026). At the merge of main into GTC-482 (27 Nov 2026,
+ * the founder's word) GTC-482's own copy of the move was dropped for this one; its change to S1
+ * (plan-input.ts among the switch's readers) stays, with its own note there.
  */
 const MERGED = 'c8b9b42';
 const TAG = `S483${Date.now().toString(36)}`;
@@ -214,6 +218,11 @@ const SWITCH_READERS = [
   'src/components/sessions/Moment1Sessions.tsx',
   'src/components/sessions/SessionTabs.tsx',
   'src/components/sessions/SessionsSwitch.tsx',
+  // ⚠ [[GTC-482]] (26 Nov 2026, the founder's rulings on its plan: "Yes to the four moved checks as
+  // you describe them (sessions-release K2, K4 and S1 ...), each the narrowest way with a dated note
+  // naming GTC-482"). The drafting reads the switch to tell the one AI call the sessions. Exactly
+  // this one name is added; S1 and S2 still read the working folder.
+  'src/lib/ai/plan-input.ts',
   'src/lib/glance/read.ts',
   'src/lib/lifecycle.ts',
   'src/lib/moment3/share-dish.ts',
