@@ -18,8 +18,11 @@
  *
  * Amounts are worked in hundredths, so a sum is never a rounding accident (0.1 + 0.2).
  *
- * CLIENT-SAFE AND PURE: no imports, no writes.
+ * CLIENT-SAFE AND PURE: no imports, no writes. ([[GTC-487]], 28 Nov 2026: one import since, the
+ * unit words of `src/lib/items/unit-words.ts`, which is pure and imports nothing.)
  */
+
+import { unitWordFor } from '@/lib/items/unit-words';
 
 /** The most one amount may be: a typing slip, not a real dish. */
 export const MAX_SHARE_AMOUNT = 1_000_000;
@@ -111,10 +114,15 @@ export function unitWordOf(i: {
   return words[i.quantityUnit] ?? i.quantityUnit.toLowerCase();
 }
 
-/** An amount and its unit word as a row reads it: "10 servings", "2.5 kg", or "3" with no word. */
+/**
+ * An amount and its unit word as a row reads it: "10 servings", "2.5 kg", or "3" with no word.
+ * [[GTC-487]] B: at exactly 1, a word of the plan's unit list reads singular ("1 tray"); any other
+ * word reads as stored ("1 pavlovas").
+ */
 export function amountDetail(amount: number | null, unitWord: string): string {
   if (amount === null || amount === undefined) return '';
-  return [roundAmount(amount), unitWord].filter((x) => x !== '').join(' ');
+  const n = roundAmount(amount);
+  return [n, unitWordFor(n, unitWord)].filter((x) => x !== '').join(' ');
 }
 
 /**
