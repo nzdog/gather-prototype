@@ -36,7 +36,9 @@ const DRY_RUN = process.env.PRIVACY_WORDS_DRY_RUN === '1';
 
 // ── The words, as ruled (16 Nov 2026) ────────────────────────────────────────────────────────
 // [[GTC-466]] (founder, 19 Nov 2026): the deploy day, 20 November 2026.
-const W0_DATE = 'Last updated: 20 November 2026';
+// [[GTC-486]] (founder ruling, 26 Nov 2026: 'Update the "Last updated" date'; 27 Nov 2026: "the
+// deploy day, 27 November 2026"): 27 November 2026.
+const W0_DATE = 'Last updated: 27 November 2026';
 const W1 = 'Usage data: when someone first opens a link we sent them, and when they answer';
 const W2 =
   'Browser details: when someone first opens a link we sent them, we keep the description their ' +
@@ -83,8 +85,11 @@ const W13 =
   'Anthropic — AI plan making (event details and dietary needs; sometimes the names of guests ' +
   'bringing items)';
 // [[GTC-466]] (founder, 19 Nov 2026): the visit count's words.
+// [[GTC-486]] (founder ruling, 26 Nov 2026): "each time the home page, the demo page, the sample's
+// start page or the new-event page is opened".
 const W14 =
-  'Visit counts: each time the home page, the demo page or the new-event page is opened, Gather ' +
+  "Visit counts: each time the home page, the demo page, the sample's start page or the new-event " +
+  'page is opened, Gather ' +
   "writes one line to its server log with the page's name and where the visitor came from: the " +
   'name of the website their browser reports (such as facebook.com), "internal" for one of ' +
   'Gather\'s own pages, or "direct" if the browser does not say. Nothing else about the visitor is ' +
@@ -251,7 +256,7 @@ const CHECKS: Check[] = [
     layer: 'W',
     label: `W0 the date reads "${W0_DATE}", and it is the page's only "Last updated"`,
     test: (i) => i.page.includes(W0_DATE) && count(i.page, 'Last updated:') === 1,
-    breakIt: (i) => withPage(i, i.page.replace('20 November 2026', '21 November 2026')),
+    breakIt: (i) => withPage(i, i.page.replace('27 November 2026', '28 November 2026')),
   },
   {
     layer: 'W',

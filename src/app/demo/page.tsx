@@ -14,6 +14,14 @@ const TRY_IT_YOURSELF = 'Try it yourself';
 const SAMPLE_PAGE = '/demo/new';
 /** [[GTC-430]] — the founder's words (30 Oct 2026), shown wherever the button is not. */
 const UNDER_CONSTRUCTION = 'Under construction';
+/**
+ * [[GTC-486]] D (founder, 26 Nov 2026): "one line only, under the Gather heading and above the
+ * button". His campaign line, with the page's own apostrophe (the explainer's). Its words are the
+ * founder's ruling of 27 Nov 2026, replacing "You’re onto it. Finally, you can show them."
+ */
+const LEAD = 'Because those potatoes won’t bring themselves to lunch.';
+/** [[GTC-486]] A, wording A1 (founder, 26 Nov 2026): the line under the button. */
+const START_LINE = 'Start your own sample event. Nothing is sent to anyone.';
 
 /**
  * /demo — [[GTC-394]] tweak 3, and [[GTC-395]] items 1 and 2 (founder, 20 Oct 2026: "Don't have the
@@ -41,6 +49,12 @@ const UNDER_CONSTRUCTION = 'Under construction';
  * the page takes the theme's warm white and warm greys, and the heading is set in the serif the
  * wordmark uses. The explainer under the button is now a heading and one fold-out per step.
  *
+ * [[GTC-486]] (founder rulings A and D, 26 Nov 2026): the button is the page's main instruction,
+ * not the steps. His campaign line sits under the heading, a line under the button says what it
+ * does, and a second "Try it yourself" waits at the foot of the steps for a visitor who read them
+ * first. All of it in the switch's one branch, so "Under construction" still stands alone. No
+ * button is stuck to the screen: it would cover the steps while they are being read.
+ *
  * The "Sarah demo" button and its handler went with GTC-395; the route's no-body path and the
  * tokens route went with [[GTC-442]]. The reset route still exists, answers 404 in production, and
  * elsewhere force-resets whichever database the server points at; this page never calls it.
@@ -58,10 +72,25 @@ export default async function DemoLandingPage(props: VisitPageProps) {
         <div className="flex flex-col gap-3">
           {isDemoStartOn() ? (
             <>
-              <div className="mx-auto w-full max-w-sm">
+              <p
+                data-demo-lead=""
+                className="-mt-6 mb-5 font-serif text-xl leading-snug text-balance text-warm-grey-700"
+              >
+                {LEAD}
+              </p>
+              <div data-demo-start="" className="mx-auto w-full max-w-sm">
                 <TryItYourselfButton href={SAMPLE_PAGE} label={TRY_IT_YOURSELF} />
+                <p
+                  data-demo-start-line=""
+                  className="mt-3 text-sm leading-snug text-balance text-warm-grey-600"
+                >
+                  {START_LINE}
+                </p>
               </div>
               <DemoExplainer />
+              <div data-demo-foot="" className="mx-auto mt-8 w-full max-w-sm">
+                <TryItYourselfButton href={SAMPLE_PAGE} label={TRY_IT_YOURSELF} />
+              </div>
             </>
           ) : (
             <p className="text-warm-grey-600">{UNDER_CONSTRUCTION}</p>

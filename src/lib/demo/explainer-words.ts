@@ -65,9 +65,12 @@ export interface ExplainerStep {
 export const EXPLAINER_WORDS = {
   /** The heading above the fold-outs. */
   TITLE: 'How Gather works, step by step',
-  /** The paragraph under it, always showing. */
-  INTRO:
-    'This is a working copy of Gather with a sample event for you to play with. You’re the host, the person who ends up organising everything. Gather is your assistant, so you don’t have to do the chasing. It works in four steps, which we call Moments. Tap a step to open it.',
+  /**
+   * The line under it, always showing. [[GTC-486]] (founder ruling A, wording A1, 26 Nov 2026):
+   * one line, so the button above stays the page's main instruction ("Remove 'Tap a step to open
+   * it.'").
+   */
+  INTRO: 'Rather read first? Each step below shows what happens.',
 } as const;
 
 const p = (text: string): ExplainerParagraph => ({ kind: 'p', text });

@@ -7,6 +7,9 @@
  * the campaign tag from utm_source only, on the home page and /demo only, from a fixed list; at
  * most 120 lines a minute), verbatim in docs/tickets/GTC-466.md.
  *
+ * [[GTC-486]] (founder ruling E, 26 Nov 2026: "Count /demo/new as a fourth page"; "No campaign tag
+ * on /demo/new"): a fourth page, `sample`, written by the sample's start page's layout.
+ *
  *   [page-visit] <page> <source>[ tag=<label>]
  *
  * Layers:
@@ -37,6 +40,9 @@ const HOME = 'src/app/page.tsx';
 const DEMO = 'src/app/demo/page.tsx';
 const NEW_LAYOUT = 'src/app/plan/new/layout.tsx';
 const NEW_PAGE = 'src/app/plan/new/page.tsx';
+/** [[GTC-486]] the sample's start page ("Create Your Event", /demo/new) and its layout. */
+const SAMPLE_LAYOUT = 'src/app/demo/new/layout.tsx';
+const SAMPLE_PAGE = 'src/app/demo/new/page.tsx';
 const MIDDLEWARE = 'middleware.ts';
 const ROOT_LAYOUT = 'src/app/layout.tsx';
 const BILLING_DIR = 'src/app/billing';
@@ -46,9 +52,11 @@ const PRIVACY = 'src/app/privacy/page.tsx';
 // ── The ruled words and numbers ────────────────────────────────────────────────────────────────
 const LABELS = ['facebook', 'instagram', 'email', 'flyer', 'podcast', 'magazine'];
 const CAP = 120;
+/** The pages that write a line ([[GTC-486]]: `sample`, the fourth). */
+const PAGES = ['home', 'demo', 'new', 'sample'];
 /** The one shape a line may have (this suite's own copy, typed from the rulings). */
 const LINE =
-  /^\[page-visit\] (home|demo|new) (direct|internal|other|[a-z0-9][a-z0-9.-]{0,63})( tag=(facebook|instagram|email|flyer|podcast|magazine))?$/;
+  /^\[page-visit\] (home|demo|new|sample) (direct|internal|other|[a-z0-9][a-z0-9.-]{0,63})( tag=(facebook|instagram|email|flyer|podcast|magazine))?$/;
 const CAP_NOTE = /^\[page-visit-cap\] dropped [1-9][0-9]*$/;
 /** The headers the counter may read, and no others. */
 const ALLOWED_HEADERS = [
@@ -156,11 +164,11 @@ function lineOf(
   if (!i.mod) return null;
   return i.mod.pageVisitLine(page, H({ ...LOAD, referer, host }), utm);
 }
-/** Every case gives `[page-visit] <page> <want>`, on each of the three pages. */
+/** Every case gives `[page-visit] <page> <want>`, on each of the four pages. */
 function allGive(i: Input, cases: Array<[string | undefined, string]>, host?: string): boolean {
   if (!i.mod) return false;
   return cases.every(([ref, want]) =>
-    ['home', 'demo', 'new'].every((p) => lineOf(i, p, ref, host) === `[page-visit] ${p} ${want}`)
+    PAGES.every((p) => lineOf(i, p, ref, host) === `[page-visit] ${p} ${want}`)
   );
 }
 
@@ -449,7 +457,7 @@ const CHECKS: Check[] = [
     test: (i) =>
       !!i.mod &&
       HOSTILE.every((ref) =>
-        ['home', 'demo', 'new'].every((p) => {
+        PAGES.every((p) => {
           const l = lineOf(i, p, ref);
           return l !== null && LINE.test(l) && !/[\r\n\u2028\u2029\u0085\u0000\u001b]/.test(l);
         })
@@ -484,7 +492,7 @@ const CHECKS: Check[] = [
       const r = seeded(466);
       let lines = 0;
       for (let k = 0; k < 5000; k++) {
-        const page = ['home', 'demo', 'new'][Math.floor(r() * 3)];
+        const page = PAGES[Math.floor(r() * PAGES.length)];
         const kind = r() < 0.7 ? LOAD : MOVE;
         const utm = r() < 0.3 ? LABELS[Math.floor(r() * LABELS.length)] : fuzzText(r);
         const l = i.mod.pageVisitLine(
@@ -504,12 +512,10 @@ const CHECKS: Check[] = [
   {
     layer: 'L',
     label:
-      'L12 the page name comes from the fixed list only: home, demo, new ("pay", "Home", "" give none)',
+      'L12 the page name comes from the fixed list only: home, demo, new, sample ("pay", "Home", "", "Sample", "demo-new" give none)',
     test: (i) =>
-      ['home', 'demo', 'new'].every(
-        (p) => lineOf(i, p, undefined) === `[page-visit] ${p} direct`
-      ) &&
-      ['pay', 'Home', '', 'home\n', 'new ', 'billing'].every(
+      PAGES.every((p) => lineOf(i, p, undefined) === `[page-visit] ${p} direct`) &&
+      ['pay', 'Home', '', 'home\n', 'new ', 'billing', 'Sample', 'sample ', 'demo-new'].every(
         (p) => lineOf(i, p, undefined) === null
       ),
     breakIt: (i) =>
@@ -527,7 +533,7 @@ const CHECKS: Check[] = [
     label: 'R1 a real page load (Sec-Fetch-Dest document, Sec-Fetch-Mode navigate) counts',
     test: (i) =>
       !!i.mod &&
-      ['home', 'demo', 'new'].every(
+      PAGES.every(
         (p) =>
           i.mod?.pageVisitLine(p, H({ ...LOAD, 'sec-fetch-site': 'cross-site' })) ===
           `[page-visit] ${p} direct`
@@ -588,7 +594,7 @@ const CHECKS: Check[] = [
       'R5 a move inside the site (Sec-Fetch-Dest empty, Sec-Fetch-Site same-origin) is "internal", whatever Referer it carries; the same from another site gives no line',
     test: (i) =>
       !!i.mod &&
-      ['home', 'demo', 'new'].every(
+      PAGES.every(
         (p) =>
           i.mod?.pageVisitLine(p, H({ ...MOVE, referer: `https://${SITE}/` })) ===
             `[page-visit] ${p} internal` &&
@@ -746,6 +752,31 @@ const CHECKS: Check[] = [
           if (page !== 'new') return i.mod.pageVisitLine(page, h, utm);
           const asHome = i.mod.pageVisitLine('home', h, utm);
           return asHome === null ? null : asHome.replace(' home ', ' new ');
+        },
+      }),
+  },
+  {
+    layer: 'U',
+    label:
+      'U6 [[GTC-486]] the sample\'s start page never carries a tag, even when one is handed to it (ruling E: "No campaign tag on /demo/new")',
+    test: (i) =>
+      !!i.mod &&
+      LABELS.every(
+        (label) =>
+          lineOf(i, 'sample', 'https://l.facebook.com/', SITE, label) ===
+          '[page-visit] sample facebook.com'
+      ) &&
+      lineOf(i, 'sample', `https://${SITE}/demo`, SITE, 'email') ===
+        '[page-visit] sample internal' &&
+      lineOf(i, 'demo', 'https://l.facebook.com/', SITE, 'facebook') ===
+        '[page-visit] demo facebook.com tag=facebook',
+    breakIt: (i) =>
+      withMod(i, {
+        pageVisitLine: (page, h, utm) => {
+          if (!i.mod) return null;
+          if (page !== 'sample') return i.mod.pageVisitLine(page, h, utm);
+          const asDemo = i.mod.pageVisitLine('demo', h, utm);
+          return asDemo === null ? null : asDemo.replace(' demo ', ' sample ');
         },
       }),
   },
@@ -946,19 +977,45 @@ const CHECKS: Check[] = [
   {
     layer: 'S',
     label:
-      'S9 exactly three files call the counter: the home page, the demo page and the new-event layout',
+      "S9 exactly four files call the counter: the home page, the demo page, the new-event layout and ([[GTC-486]]) the sample's start page's layout",
     test: (i) =>
       JSON.stringify(
         i.files.filter((f) => /await countPageVisit\(/.test(codeOnly(i.read(f)))).sort()
-      ) === JSON.stringify([HOME, DEMO, NEW_LAYOUT].sort()),
+      ) === JSON.stringify([HOME, DEMO, NEW_LAYOUT, SAMPLE_LAYOUT].sort()),
     breakIt: (i) => editFile(i, PRIVACY, /$/, "\nawait countPageVisit('home');\n"),
+  },
+  {
+    layer: 'S',
+    label:
+      "S10 [[GTC-486]] the sample's start page's layout is GTC-447's switch, then the counter, then its page: await connection(); the switch's not-found; await countPageVisit('sample') with no query; <>{children}</>; the page itself names no counter",
+    test: (i) =>
+      flat(codeOnly(i.read(SAMPLE_LAYOUT))) ===
+        "import type { ReactNode } from 'react'; import { notFound } from 'next/navigation'; " +
+          "import { connection } from 'next/server'; " +
+          "import { isDemoStartOn } from '@/lib/demo/start-switch'; " +
+          "import { countPageVisit } from '@/lib/page-visit'; " +
+          'export default async function DemoNewLayout({ children }: { children: ReactNode }) { ' +
+          'await connection(); if (!isDemoStartOn()) notFound(); ' +
+          "await countPageVisit('sample'); return <>{children}</>; }" &&
+      i.read(SAMPLE_PAGE).length > 0 &&
+      !/page-visit|countPageVisit/.test(i.read(SAMPLE_PAGE)),
+    breakIt: (i) =>
+      // The counter moved above the switch: a closed demo's not-found would be counted.
+      // Each skipped comment line must end at its own line break, so the pattern can read the
+      // gap only one way (CodeQL alert 157, 27 Nov 2026: the old form could take very long).
+      editFile(
+        i,
+        SAMPLE_LAYOUT,
+        /if \(!isDemoStartOn\(\)\) notFound\(\);((?:\s*\/\/[^\n]*\n)*\s*)await countPageVisit\('sample'\);/,
+        "await countPageVisit('sample');$1if (!isDemoStartOn()) notFound();"
+      ),
   },
 ];
 
 // ── Run ────────────────────────────────────────────────────────────────────────────────────────
 function changedBetween(a: Input, b: Input): boolean {
   if (a.mod !== b.mod) return true;
-  const files = [...new Set([...a.files, ...b.files, COUNTER, NEW_LAYOUT])];
+  const files = [...new Set([...a.files, ...b.files, COUNTER, NEW_LAYOUT, SAMPLE_LAYOUT])];
   return files.some((f) => a.read(f) !== b.read(f));
 }
 

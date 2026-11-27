@@ -533,6 +533,34 @@ const GTC466_PRIVACY_PAIRS: Pairs = [
   ],
   ['Last updated: 16 November 2026', 'Last updated: 20 November 2026'],
 ];
+/**
+ * [[GTC-486]] (founder rulings, 26 Nov 2026): Visit counts names the sample's start page ("each
+ * time the home page, the demo page, the sample's start page or the new-event page is opened"),
+ * the paragraph rewrapped by the formatter and no other word changed; and the date, the deploy day
+ * (founder, 27 Nov 2026): 27 November 2026.
+ */
+const GTC486_PRIVACY_PAIRS: Pairs = [
+  [
+    '                <strong className="text-gray-900">Visit counts:</strong> each time the home page,\n' +
+      '                the demo page or the new-event page is opened, Gather writes one line to its server\n' +
+      '                log with the page&apos;s name and where the visitor came from: the name of the\n' +
+      '                website their browser reports (such as facebook.com), &quot;internal&quot; for one\n' +
+      '                of Gather&apos;s own pages, or &quot;direct&quot; if the browser does not say.\n' +
+      '                Nothing else about the visitor is written: no internet address, no browser\n' +
+      '                description, no cookie and no full web address. If the link carried one of\n' +
+      '                Gather&apos;s own campaign labels (such as facebook), that label is written too.\n',
+    '                <strong className="text-gray-900">Visit counts:</strong> each time the home page,\n' +
+      '                the demo page, the sample&apos;s start page or the new-event page is opened, Gather\n' +
+      '                writes one line to its server log with the page&apos;s name and where the visitor\n' +
+      '                came from: the name of the website their browser reports (such as facebook.com),\n' +
+      '                &quot;internal&quot; for one of Gather&apos;s own pages, or &quot;direct&quot; if\n' +
+      '                the browser does not say. Nothing else about the visitor is written: no internet\n' +
+      '                address, no browser description, no cookie and no full web address. If the link\n' +
+      '                carried one of Gather&apos;s own campaign labels (such as facebook), that label is\n' +
+      '                written too.\n',
+  ],
+  ['Last updated: 20 November 2026', 'Last updated: 27 November 2026'],
+];
 const NAV_IMPORT_OLD =
   "import { Plus, Calendar, CreditCard, LogOut, LogIn, Menu, X, ChevronDown } from 'lucide-react';\n";
 const NAV_IMPORT_NEW =
@@ -1138,10 +1166,13 @@ function layerF() {
   const expected464 = expected === null ? null : applyPairs(expected, GTC464_PRIVACY_PAIRS);
   // [[GTC-466]] (founder rulings, 19 Nov 2026): then the visit count's words, each exactly once.
   const expected466 = expected464 === null ? null : applyPairs(expected464, GTC466_PRIVACY_PAIRS);
+  // [[GTC-486]] (founder rulings, 26 Nov 2026): then the sample's start page in Visit counts, and
+  // the date, each old piece exactly once.
+  const expected486 = expected466 === null ? null : applyPairs(expected466, GTC486_PRIVACY_PAIRS);
   assert(
     'F',
-    'F3 nothing else on the page moves: it is T0’s file with only the two links, the import, GTC-464’s ruled words and GTC-466’s visit-count words changed',
-    CHECKS.exactly(src, expected466)
+    'F3 nothing else on the page moves: it is T0’s file with only the two links, the import, GTC-464’s ruled words, GTC-466’s visit-count words and GTC-486’s sample start page and date changed',
+    CHECKS.exactly(src, expected486)
   );
 }
 

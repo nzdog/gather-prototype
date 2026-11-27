@@ -42,14 +42,16 @@ import { installProviderTrap, trapCount } from './helpers/provider-trap';
 const ROOT = path.join(__dirname, '..');
 const BASE = '2c9771b'; // origin/main when GTC-483 began (the merge of GTC-481)
 /**
- * ⚠ [[GTC-482]] (26 Nov 2026, the founder's rulings on its plan: "Yes to the four moved checks as you
- * describe them (sessions-release K2, K4 and S1; demo-plan-tries S2), each the narrowest way with a
- * dated note naming GTC-482"). GTC-483 as merged into main (pull request #125). K2 ("the edited
- * source files are exactly the one named") and K4 ("package.json gains exactly one line") state
- * GTC-483's own diff, so they read 2c9771b against this merge instead of the working folder, as
- * GTC-483 moved sessions-guest-answers' K13. What this gives up, said plainly: K2 and K4 no longer
- * notice a later edit; each later ticket's suite watches its own. package-lock.json and the
- * untracked files are still read live.
+ * ⚠ [[GTC-486]] (26 Nov 2026, GTC-486's gate; for the founder's word, as GTC-483 moved GTC-481's
+ * pins). K's "the edited source files are exactly the one named" and "package.json gains exactly
+ * one line" state GTC-483's own facts. GTC-486 edits five more source files and adds its own
+ * script line, so those two checks read the tree as GTC-483 merged it (MERGED, the merge of pull
+ * request #125) instead of the working folder: they still prove exactly what GTC-483 did. Every
+ * other check here still reads the working folder.
+ * [[GTC-482]] needed the same move, for its own five source files and its own script line (the
+ * founder's rulings on its plan, 26 Nov 2026). At the merge of main into GTC-482 (27 Nov 2026,
+ * the founder's word) GTC-482's own copy of the move was dropped for this one; its change to S1
+ * (plan-input.ts among the switch's readers) stays, with its own note there.
  */
 const MERGED = 'c8b9b42';
 const TAG = `S483${Date.now().toString(36)}`;
@@ -919,7 +921,8 @@ async function main() {
       want !== null && read(file) === want
     );
   }
-  const changed = (git(['diff', '--name-only', BASE, MERGED, '--', 'src']) ?? 'x') // [[GTC-482]]: as merged
+  // [[GTC-486]]: as GTC-483 merged them (MERGED), not the working folder; see the note at MERGED.
+  const changed = (git(['diff', '--name-only', BASE, MERGED, '--', 'src']) ?? 'x')
     .split('\n')
     .filter(Boolean);
   check(
@@ -934,7 +937,8 @@ async function main() {
     git(['diff', '--quiet', BASE, '--', 'prisma']) !== null &&
       (git(['ls-files', '--others', '--exclude-standard', 'prisma']) ?? 'x').trim() === ''
   );
-  const pkgDiff = (git(['diff', '-U0', '--no-color', BASE, MERGED, '--', 'package.json']) ?? '') // [[GTC-482]]: as merged
+  // [[GTC-486]]: as GTC-483 merged it (MERGED), not the working folder; see the note at MERGED.
+  const pkgDiff = (git(['diff', '-U0', '--no-color', BASE, MERGED, '--', 'package.json']) ?? '')
     .split('\n')
     .filter((l) => /^[+-]/.test(l) && !/^(\+\+\+|---)/.test(l));
   check(
