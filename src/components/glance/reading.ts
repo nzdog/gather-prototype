@@ -210,7 +210,7 @@ export function nudgeDayFor(person: GlancePerson, now: Date): string | null {
  * Stated rather than discovered: this is the one place a quantity can read ungrammatically, and
  * it reads that way because the alternative is editing her.
  *
- * ⚠ NARROWED, NOT DELETED — [[GTC-487]] (the founder's ruling 7, 28 Nov 2026): "A word that is
+ * ⚠ NARROWED, NOT DELETED — [[GTC-488]] (the founder's ruling 7, 28 Nov 2026): "A word that is
  * exactly one of the list's words, same letters and same case, reads singular at exactly 1. Every
  * other word, and every other amount, reads exactly as stored." Moment 2's unit list saves a picked
  * word as a custom unit too, so "1 trays" now reads "1 tray" (`unitWordFor`); "1 big bowl" stays.

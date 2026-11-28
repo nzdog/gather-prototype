@@ -89,7 +89,7 @@ export function SessionsCard({ eventId, initial }: { eventId: string; initial?: 
   }, [load]);
 
   /*
-    [[GTC-487]] C — the dates can change elsewhere (the Edit event box on the plan page, another tab),
+    [[GTC-488]] C — the dates can change elsewhere (the Edit event box on the plan page, another tab),
     so the card reads its route again when the page comes back into view, is restored from the
     phone's memory by the back button, or its window gets focus. The same load, the same route. Two
     of these often come together, so a read is skipped if one began under a second before. The card

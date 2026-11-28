@@ -1885,17 +1885,19 @@ async function main() {
     const gtc485Ok =
       git(['cat-file', '-e', `${GTC485_AT}^{commit}`]).status === 0 &&
       git(['diff', '--quiet', GTC472_BASE, GTC485_AT, '--', ...GTC485_FILES]).status === 0;
-    // ⚠ AND ONE FILE ASKED AT A FIXED COMMIT SINCE [[GTC-487]] (28 Nov 2026, the founder's word on
+    // ⚠ AND ONE FILE ASKED AT A FIXED COMMIT SINCE [[GTC-488]] (28 Nov 2026, the founder's word on
     // its plan: "yes to all 13 moves as you describe them, each the narrowest way with a dated note
-    // naming GTC-487"). GTC-487 edits the board's red panel on purpose (A: the dish's session tag,
+    // naming GTC-487",
+    // this ticket's number until 28 Nov 2026). GTC-488 edits the board's red panel on purpose
+    // (A: the dish's session tag,
     // as the reading panel draws it). It is taken out of the live list by exact name, and must be
-    // unchanged from this base to 89da9a3, GTC-487's base. Its bytes are held by
+    // unchanged from this base to 89da9a3, GTC-488's base. Its bytes are held by
     // test:small-fixes-batch. Everything else on J2 stays live.
-    const GTC487_AT = '89da9a3';
-    const GTC487_FILES = ['src/components/glance/PersonSurface.tsx'];
-    const gtc487Ok =
-      git(['cat-file', '-e', `${GTC487_AT}^{commit}`]).status === 0 &&
-      git(['diff', '--quiet', GTC472_BASE, GTC487_AT, '--', ...GTC487_FILES]).status === 0;
+    const GTC488_AT = '89da9a3';
+    const GTC488_FILES = ['src/components/glance/PersonSurface.tsx'];
+    const gtc488Ok =
+      git(['cat-file', '-e', `${GTC488_AT}^{commit}`]).status === 0 &&
+      git(['diff', '--quiet', GTC472_BASE, GTC488_AT, '--', ...GTC488_FILES]).status === 0;
     const changed = git(['diff', '--name-only', GTC472_BASE, '--', ...FORBIDDEN])
       .stdout.split('\n')
       .filter(
@@ -1904,7 +1906,7 @@ async function main() {
           !GTC477_FILES.includes(f) &&
           !isGtc478(f) &&
           !GTC485_FILES.includes(f) &&
-          !GTC487_FILES.includes(f)
+          !GTC488_FILES.includes(f)
       )
       .join('\n');
     const untracked = git([
@@ -1917,7 +1919,7 @@ async function main() {
     assert('J1 the base commit is in this checkout, so the checks below mean something', baseOk);
     assert(
       'J2 nothing under the send, the nudges, the decide-by clock, the board, the assign and items routes, the ledger, auth, Stripe or the schema is changed or added',
-      baseOk && gtc477Ok && gtc478Ok && gtc485Ok && gtc487Ok && changed === '' && untracked === '',
+      baseOk && gtc477Ok && gtc478Ok && gtc485Ok && gtc488Ok && changed === '' && untracked === '',
       `${changed} ${untracked}`
     );
     const files = git(['diff', '--name-only', GTC472_BASE, GTC478_AT])

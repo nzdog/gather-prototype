@@ -1,5 +1,5 @@
 /**
- * [[GTC-487]] B — "1 pieces", "x1 pieces", "1 trays" (the founder's walk of GTC-483, 26 Nov 2026).
+ * [[GTC-488]] B — "1 pieces", "x1 pieces", "1 trays" (the founder's walk of GTC-483, 26 Nov 2026).
  * The singular of each word the plan's unit list offers (Moment 2's `COMMON_UNITS`), W1 to W18,
  * and one rule (the founder's ruling 7, 28 Nov 2026): at exactly 1, a word that is exactly one of
  * the list's words, same letters and same case, reads as its singular. Every other word, and every

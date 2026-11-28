@@ -141,7 +141,7 @@ interface Moment2PlanViewProps {
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
-/** [[GTC-487]] D: the bar's fold words (the founder's ruling 6, 28 Nov 2026: W19, W20, W21, W23). */
+/** [[GTC-488]] D: the bar's fold words (the founder's ruling 6, 28 Nov 2026: W19, W20, W21, W23). */
 export const PLAN_BAR_WORDS = {
   LESS: 'Less ▾',
   LESS_NAME: 'Show fewer buttons',
@@ -149,7 +149,7 @@ export const PLAN_BAR_WORDS = {
   MORE_NAME: 'Show all the buttons',
 } as const;
 
-/** [[GTC-487]] D (ruling 4): where this device keeps her choice, one name for all her events. */
+/** [[GTC-488]] D (ruling 4): where this device keeps her choice, one name for all her events. */
 export const PLAN_BAR_FOLDED_KEY = 'gather.planBarFolded';
 
 const COMMON_UNITS = [
@@ -214,7 +214,7 @@ export default function Moment2PlanView({
   const [bulkRemoving, setBulkRemoving] = useState(false);
 
   /*
-    [[GTC-487]] D — the bar folds away when she taps (rulings 2 and 3), and stays as she left it on
+    [[GTC-488]] D — the bar folds away when she taps (rulings 2 and 3), and stays as she left it on
     this device (ruling 4: the browser's own storage, one name for all her events; nothing in the
     database, nothing sent). It is drawn open first, as the server draws it, then read.
   */
@@ -249,7 +249,7 @@ export default function Moment2PlanView({
     return () => watch.disconnect();
   }, []);
 
-  // [[GTC-487]] E — Generate's clock while a Regenerate waits: the time since the press, never less
+  // [[GTC-488]] E — Generate's clock while a Regenerate waits: the time since the press, never less
   // than it was, so the bar cannot go back.
   const [waitMs, setWaitMs] = useState(0);
   useEffect(() => {
@@ -428,7 +428,7 @@ export default function Moment2PlanView({
               : 'Not quite right? Regenerate the plan'}
           </button>
         )}
-        {/* [[GTC-487]] E: Generate's bar under the button while the whole plan regenerates. */}
+        {/* [[GTC-488]] E: Generate's bar under the button while the whole plan regenerates. */}
         {regeneratingScope === 'plan' && (
           <PlanWaitBar
             percent={planWaitPercent(waitMs, false)}
@@ -500,7 +500,7 @@ export default function Moment2PlanView({
             </button>
           )}
         </div>
-        {/* [[GTC-487]] D: room for the bar beyond the page's own 128 px, so the last control can
+        {/* [[GTC-488]] D: room for the bar beyond the page's own 128 px, so the last control can
             always sit above it, open or folded. */}
         <div aria-hidden="true" style={{ height: Math.max(0, Math.ceil(barHeight) + 16 - 128) }} />
       </div>
@@ -531,7 +531,7 @@ export default function Moment2PlanView({
         data-plan-bar={barFolded ? 'folded' : 'open'}
         className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 p-4"
       >
-        {/* [[GTC-487]] D: the fold control, a slim row on top of the open bar (ruling 2, option 1). */}
+        {/* [[GTC-488]] D: the fold control, a slim row on top of the open bar (ruling 2, option 1). */}
         {!barFolded && (
           <div className="max-w-2xl mx-auto -mt-3 mb-1 flex justify-center">
             <button
@@ -547,7 +547,7 @@ export default function Moment2PlanView({
           </div>
         )}
         <div className="max-w-2xl mx-auto flex items-center justify-between gap-3">
-          {/* [[GTC-487]] D: folded, one slim row: More, and "Plan looks good" still in reach. */}
+          {/* [[GTC-488]] D: folded, one slim row: More, and "Plan looks good" still in reach. */}
           {barFolded && (
             <button
               type="button"
@@ -650,7 +650,7 @@ interface CategorySectionProps {
   categoryKey: string | null;
   regeneratingScope: 'plan' | string | null;
   onRegenerateCategory: (categoryKey: string) => void;
-  /** [[GTC-487]] E: this category's own bar while it regenerates; absent otherwise. */
+  /** [[GTC-488]] E: this category's own bar while it regenerates; absent otherwise. */
   wait?: { percent: number; stage: string; label: string };
 }
 
@@ -684,7 +684,7 @@ function CategorySection({
   const isRegenerating =
     regeneratingScope === 'plan' || (categoryKey !== null && regeneratingScope === categoryKey);
 
-  // [[GTC-487]] E: while its own bar shows, the section neither pulses nor greys (the bar would fade
+  // [[GTC-488]] E: while its own bar shows, the section neither pulses nor greys (the bar would fade
   // with it); its rows still cannot be tapped.
   const regeneratingLook = wait
     ? 'pointer-events-none'
@@ -775,7 +775,7 @@ function CategorySection({
                     </button>
                   </div>
                 )}
-                {/* [[GTC-487]] E: Generate's bar under the button while this category regenerates. */}
+                {/* [[GTC-488]] E: Generate's bar under the button while this category regenerates. */}
                 {wait && (
                   <PlanWaitBar
                     percent={wait.percent}

@@ -63,16 +63,17 @@ const MAIN = 'c8b9b42'; // origin/main when GTC-482 began (the merge of GTC-483)
  */
 const MERGED_MAIN = 'b7f3e76';
 /**
- * ⚠ [[GTC-487]] (28 Nov 2026, the founder's word on its plan: "yes to all 13 moves as you describe
- * them, each the narrowest way with a dated note naming GTC-487"). GTC-487 edits nine source files
+ * ⚠ [[GTC-488]] (28 Nov 2026, the founder's word on its plan: "yes to all 13 moves as you describe
+ * them, each the narrowest way with a dated note naming GTC-487",
+ * this ticket's number until 28 Nov 2026). GTC-488 edits nine source files
  * after this ticket's merge (89da9a3), two of them on UNTOUCHED's list (the setup page and the
  * Generate screen), and adds its own script line. So K6 and K9, this ticket's claims about its own
- * files and package.json lines, read the tree at its merge (GTC487_BASE) instead of the working
+ * files and package.json lines, read the tree at its merge (GTC488_BASE) instead of the working
  * folder, and K10 checks those two files unchanged from c8b9b42 to that merge. Everything else on
  * UNTOUCHED, and the untracked and package-lock.json halves, still read the working folder.
  */
-const GTC487_BASE = '89da9a3';
-const GTC487_OUT_OF_UNTOUCHED = [
+const GTC488_BASE = '89da9a3';
+const GTC488_OUT_OF_UNTOUCHED = [
   'src/app/plan/[eventId]/setup/page.tsx',
   'src/components/plan/Moment2Step2Skeleton.tsx',
 ];
@@ -1609,8 +1610,8 @@ async function main() {
     );
   }
   // [[GTC-486]]: against main as merged in (MERGED_MAIN); see the note there.
-  // [[GTC-487]]: the tree at this ticket's merge (GTC487_BASE); see the note there.
-  const changed = (git(['diff', '--name-only', MERGED_MAIN, GTC487_BASE, '--', 'src']) ?? 'x')
+  // [[GTC-488]]: the tree at this ticket's merge (GTC488_BASE); see the note there.
+  const changed = (git(['diff', '--name-only', MERGED_MAIN, GTC488_BASE, '--', 'src']) ?? 'x')
     .split('\n')
     .filter(Boolean)
     .sort();
@@ -1641,9 +1642,9 @@ async function main() {
     routesAt(null).length > 100 && same(routesAt(null), routesAt(MAIN))
   );
   // [[GTC-486]]: against main as merged in (MERGED_MAIN); see the note there.
-  // [[GTC-487]]: the tree at this ticket's merge (GTC487_BASE); see the note there.
+  // [[GTC-488]]: the tree at this ticket's merge (GTC488_BASE); see the note there.
   const pkgDiff = (
-    git(['diff', '-U0', '--no-color', MERGED_MAIN, GTC487_BASE, '--', 'package.json']) ?? ''
+    git(['diff', '-U0', '--no-color', MERGED_MAIN, GTC488_BASE, '--', 'package.json']) ?? ''
   )
     .split('\n')
     .filter((l) => /^[+-]/.test(l) && !/^(\+\+\+|---)/.test(l));
@@ -1660,15 +1661,15 @@ async function main() {
   check(
     `K${++k}`,
     'the send, the nudges, the decide-by clock, the opt-outs, the guest page, Moment 2’s screens, auth, the sessions code, claude.ts and the cap: byte for byte c8b9b42’s',
-    // [[GTC-487]]: its two files out of the live list by name, unchanged c8b9b42 to its merge.
-    GTC487_OUT_OF_UNTOUCHED.every((f) => UNTOUCHED.includes(f)) &&
-      gitOk(['diff', '--quiet', MAIN, GTC487_BASE, '--', ...GTC487_OUT_OF_UNTOUCHED]) &&
+    // [[GTC-488]]: its two files out of the live list by name, unchanged c8b9b42 to its merge.
+    GTC488_OUT_OF_UNTOUCHED.every((f) => UNTOUCHED.includes(f)) &&
+      gitOk(['diff', '--quiet', MAIN, GTC488_BASE, '--', ...GTC488_OUT_OF_UNTOUCHED]) &&
       gitOk([
         'diff',
         '--quiet',
         MAIN,
         '--',
-        ...UNTOUCHED.filter((f) => !GTC487_OUT_OF_UNTOUCHED.includes(f)),
+        ...UNTOUCHED.filter((f) => !GTC488_OUT_OF_UNTOUCHED.includes(f)),
       ])
   );
   const readers = (

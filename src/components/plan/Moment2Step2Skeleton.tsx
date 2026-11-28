@@ -69,7 +69,7 @@ const SKELETON_CATEGORIES = [
  * it. An estimate (src/lib/setup/plan-wait.ts): it never passes 95 before the plan has arrived and
  * never goes back; 100 once it has. The stage words change on the clock (Q3).
  *
- * [[GTC-487]] E: the plan screen's Regenerate draws this same bar, with its own screen-reader name
+ * [[GTC-488]] E: the plan screen's Regenerate draws this same bar, with its own screen-reader name
  * (`label`) and spacing (`className`). Left out, both are as Generate has always drawn them.
  */
 export function PlanWaitBar({

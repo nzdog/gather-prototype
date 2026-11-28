@@ -25,7 +25,7 @@
  * The person, their why, what they hold, and the actions. No behaviour — Ruling 1's fence
  * is not relaxed by a tap, and `tests/glance-read-test.ts` carries the denylist over this
  * file. No plan content beyond the row's own name: no quantity, no team name, no
- * drop-off, no notes. ([[GTC-487]] A, the founder's brief of 28 Nov 2026: with the sessions switch
+ * drop-off, no notes. ([[GTC-488]] A, the founder's brief of 28 Nov 2026: with the sessions switch
  * on, the dish's session tag too, drawn as the reading panel draws it, so two dishes of one name
  * can be told apart. Still no quantity, team, drop-off or notes.) No history, no message log, no counts of anything — with ONE
  * exception, ruled ([[GTC-350]] Q2, 2026-10-02): the guest's own text replies, every
@@ -733,7 +733,7 @@ export default function PersonSurface({
                       {row.critical ? (
                         <span className="text-[11px] text-[#888780]">critical</span>
                       ) : null}
-                      {/* [[GTC-487]] A: the session, as the reading panel draws it; none for a whole-event dish. */}
+                      {/* [[GTC-488]] A: the session, as the reading panel draws it; none for a whole-event dish. */}
                       {row.session ? (
                         <span
                           data-surface-session=""

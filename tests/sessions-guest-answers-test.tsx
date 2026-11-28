@@ -94,16 +94,17 @@ const atBase = (rel: string) => git(['show', `${BASE}:${rel}`]) ?? '';
  */
 const MERGED = '2c9771b';
 /**
- * ⚠ [[GTC-487]] (28 Nov 2026, the founder's word on its plan: "yes to all 13 moves as you describe
- * them, each the narrowest way with a dated note naming GTC-487"). GTC-487 edits the Sessions card
+ * ⚠ [[GTC-488]] (28 Nov 2026, the founder's word on its plan: "yes to all 13 moves as you describe
+ * them, each the narrowest way with a dated note naming GTC-487",
+ * this ticket's number until 28 Nov 2026). GTC-488 edits the Sessions card
  * (C: it reads its route again when the page comes back into view) and adds one source file
  * (src/lib/items/unit-words.ts). K4 still reads the card in the working folder: 6e84218 plus
- * GTC-481's named hunks plus GTC-487's two, each exactly once. K8, GTC-481's own claim about its
- * four new files, reads the tree at GTC-487's base (89da9a3) instead of the index; the untracked
+ * GTC-481's named hunks plus GTC-488's two, each exactly once. K8, GTC-481's own claim about its
+ * four new files, reads the tree at GTC-488's base (89da9a3) instead of the index; the untracked
  * half still reads the working folder.
  */
-const GTC487_BASE = '89da9a3';
-const GTC487_HUNKS: Record<string, [string, string][]> = {
+const GTC488_BASE = '89da9a3';
+const GTC488_HUNKS: Record<string, [string, string][]> = {
   'src/components/sessions/Moment1Sessions.tsx': [
     [
       "import { useCallback, useEffect, useState } from 'react';\n",
@@ -111,7 +112,7 @@ const GTC487_HUNKS: Record<string, [string, string][]> = {
     ],
     [
       '  useEffect(() => {\n    load();\n  }, [load]);\n',
-      "  useEffect(() => {\n    load();\n  }, [load]);\n\n  /*\n    [[GTC-487]] C — the dates can change elsewhere (the Edit event box on the plan page, another tab),\n    so the card reads its route again when the page comes back into view, is restored from the\n    phone's memory by the back button, or its window gets focus. The same load, the same route. Two\n    of these often come together, so a read is skipped if one began under a second before. The card\n    is never drawn with the sessions switch off, so nothing here runs then.\n  */\n  const lastRead = useRef(0);\n  useEffect(() => {\n    const again = () => {\n      if (document.visibilityState !== 'visible') return;\n      const now = Date.now();\n      if (now - lastRead.current < 1000) return;\n      lastRead.current = now;\n      load();\n    };\n    const restored = (e: PageTransitionEvent) => {\n      if (e.persisted) again();\n    };\n    document.addEventListener('visibilitychange', again);\n    window.addEventListener('pageshow', restored);\n    window.addEventListener('focus', again);\n    return () => {\n      document.removeEventListener('visibilitychange', again);\n      window.removeEventListener('pageshow', restored);\n      window.removeEventListener('focus', again);\n    };\n  }, [load]);\n",
+      "  useEffect(() => {\n    load();\n  }, [load]);\n\n  /*\n    [[GTC-488]] C — the dates can change elsewhere (the Edit event box on the plan page, another tab),\n    so the card reads its route again when the page comes back into view, is restored from the\n    phone's memory by the back button, or its window gets focus. The same load, the same route. Two\n    of these often come together, so a read is skipped if one began under a second before. The card\n    is never drawn with the sessions switch off, so nothing here runs then.\n  */\n  const lastRead = useRef(0);\n  useEffect(() => {\n    const again = () => {\n      if (document.visibilityState !== 'visible') return;\n      const now = Date.now();\n      if (now - lastRead.current < 1000) return;\n      lastRead.current = now;\n      load();\n    };\n    const restored = (e: PageTransitionEvent) => {\n      if (e.persisted) again();\n    };\n    document.addEventListener('visibilitychange', again);\n    window.addEventListener('pageshow', restored);\n    window.addEventListener('focus', again);\n    return () => {\n      document.removeEventListener('visibilitychange', again);\n      window.removeEventListener('pageshow', restored);\n      window.removeEventListener('focus', again);\n    };\n  }, [load]);\n",
     ],
   ],
 };
@@ -1163,8 +1164,8 @@ async function main() {
   for (const [file, hunks] of Object.entries(K_HUNKS)) {
     k++;
     const base = atBase(file);
-    // [[GTC-487]]: its named hunks after GTC-481's, for the file it edits; see the note at MERGED.
-    const later = GTC487_HUNKS[file] ?? [];
+    // [[GTC-488]]: its named hunks after GTC-481's, for the file it edits; see the note at MERGED.
+    const later = GTC488_HUNKS[file] ?? [];
     let want: string | null = base.length > 0 ? base : null;
     for (const [a, b] of [...hunks, ...later]) {
       if (want === null || count(want, a) !== 1) {
@@ -1175,12 +1176,12 @@ async function main() {
     }
     check(
       `K${k}`,
-      `${file}: 6e84218 plus exactly its ${hunks.length} named hunk(s)${later.length > 0 ? ` and GTC-487's ${later.length}` : ''}`,
+      `${file}: 6e84218 plus exactly its ${hunks.length} named hunk(s)${later.length > 0 ? ` and GTC-488's ${later.length}` : ''}`,
       want !== null && read(file) === want
     );
   }
-  // [[GTC-487]]: the tree at GTC-487's base, not the index; see the note at MERGED.
-  const srcNow = (git(['ls-tree', '-r', '--name-only', GTC487_BASE, 'src']) ?? '')
+  // [[GTC-488]]: the tree at GTC-488's base, not the index; see the note at MERGED.
+  const srcNow = (git(['ls-tree', '-r', '--name-only', GTC488_BASE, 'src']) ?? '')
     .split('\n')
     .filter(Boolean);
   const srcBase = (git(['ls-tree', '-r', '--name-only', BASE, 'src']) ?? '')

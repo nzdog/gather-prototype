@@ -163,7 +163,7 @@ function mapItemsToMoment3(items: Moment3ApiItem[]): {
             ? { personId: item.assignment.person.id, name: item.assignment.person.name }
             : null;
           const kind = item.kind ?? 'ITEM';
-          // [[GTC-487]] B: "1 tray", not "1 trays", on Moment 3's row and its Details box.
+          // [[GTC-488]] B: "1 tray", not "1 trays", on Moment 3's row and its Details box.
           const unitWord = unitWordFor(item.quantityAmount, mapItemUnitToDisplay(item));
           const amountAndUnit = [item.quantityAmount ?? '', unitWord]
             .filter((x) => x !== '')

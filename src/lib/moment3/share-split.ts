@@ -18,7 +18,7 @@
  *
  * Amounts are worked in hundredths, so a sum is never a rounding accident (0.1 + 0.2).
  *
- * CLIENT-SAFE AND PURE: no imports, no writes. ([[GTC-487]], 28 Nov 2026: one import since, the
+ * CLIENT-SAFE AND PURE: no imports, no writes. ([[GTC-488]], 28 Nov 2026: one import since, the
  * unit words of `src/lib/items/unit-words.ts`, which is pure and imports nothing.)
  */
 
@@ -116,7 +116,7 @@ export function unitWordOf(i: {
 
 /**
  * An amount and its unit word as a row reads it: "10 servings", "2.5 kg", or "3" with no word.
- * [[GTC-487]] B: at exactly 1, a word of the plan's unit list reads singular ("1 tray"); any other
+ * [[GTC-488]] B: at exactly 1, a word of the plan's unit list reads singular ("1 tray"); any other
  * word reads as stored ("1 pavlovas").
  */
 export function amountDetail(amount: number | null, unitWord: string): string {

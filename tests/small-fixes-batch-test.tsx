@@ -1,5 +1,5 @@
 /**
- * [[GTC-487]] — five small fixes, one ticket (the founder's brief and rulings, 28 Nov 2026).
+ * [[GTC-488]] — five small fixes, one ticket (the founder's brief and rulings, 28 Nov 2026).
  *
  *   A  the board's red panel draws the dish's session tag, as the reading panel draws it
  *   B  a quantity of 1 reads singular for a word of the unit list ("1 tray"), on every screen
@@ -27,16 +27,16 @@ import os from 'os';
 import path from 'path';
 import { installProviderTrap, trapCount } from './helpers/provider-trap';
 import {
-  GTC487_PLAN_VIEW_CHANGES,
-  withoutGtc487PlanView,
-} from './helpers/gtc487-plan-view-changes';
+  GTC488_PLAN_VIEW_CHANGES,
+  withoutGtc488PlanView,
+} from './helpers/gtc488-plan-view-changes';
 
 const ROOT = path.join(__dirname, '..');
-const BASE = '89da9a3'; // origin/main when GTC-487 began (the merge of pull request #128, GTC-482)
+const BASE = '89da9a3'; // origin/main when GTC-488 began (the merge of pull request #128, GTC-482)
 const TAG = `S487${Date.now().toString(36)}`;
 const VAR = 'GATHER_SESSIONS';
 const FIXTURE_FILE =
-  process.env.GTC487_FIXTURE_FILE ?? path.join(os.tmpdir(), `gtc487-small-fixes-${TAG}.json`);
+  process.env.GTC488_FIXTURE_FILE ?? path.join(os.tmpdir(), `gtc488-small-fixes-${TAG}.json`);
 const DAY = 864e5;
 
 let passed = 0;
@@ -149,7 +149,7 @@ const WORDS_SHA = 'fff72f794e1d59373bfe229717e963451b64271e98a25e42e46db264f8bbe
 
 /**
  * Each edited file's named changes, [was, is], in order, against 89da9a3. The plan view's sixteen
- * are in tests/helpers/gtc487-plan-view-changes.ts (three older suites take them back too).
+ * are in tests/helpers/gtc488-plan-view-changes.ts (three older suites take them back too).
  */
 const CHANGES: Record<string, [string, string][]> = {
   'src/app/plan/[eventId]/setup/page.tsx': [
@@ -159,17 +159,17 @@ const CHANGES: Record<string, [string, string][]> = {
     ],
     [
       "          const kind = item.kind ?? 'ITEM';\n          const amountAndUnit = [item.quantityAmount ?? '', mapItemUnitToDisplay(item)]\n",
-      "          const kind = item.kind ?? 'ITEM';\n          // [[GTC-487]] B: \"1 tray\", not \"1 trays\", on Moment 3's row and its Details box.\n          const unitWord = unitWordFor(item.quantityAmount, mapItemUnitToDisplay(item));\n          const amountAndUnit = [item.quantityAmount ?? '', unitWord]\n",
+      "          const kind = item.kind ?? 'ITEM';\n          // [[GTC-488]] B: \"1 tray\", not \"1 trays\", on Moment 3's row and its Details box.\n          const unitWord = unitWordFor(item.quantityAmount, mapItemUnitToDisplay(item));\n          const amountAndUnit = [item.quantityAmount ?? '', unitWord]\n",
     ],
   ],
   'src/components/glance/PersonSurface.tsx': [
     [
       " * file. No plan content beyond the row's own name: no quantity, no team name, no\n * drop-off, no notes. No history, no message log, no counts of anything — with ONE\n",
-      " * file. No plan content beyond the row's own name: no quantity, no team name, no\n * drop-off, no notes. ([[GTC-487]] A, the founder's brief of 28 Nov 2026: with the sessions switch\n * on, the dish's session tag too, drawn as the reading panel draws it, so two dishes of one name\n * can be told apart. Still no quantity, team, drop-off or notes.) No history, no message log, no counts of anything — with ONE\n",
+      " * file. No plan content beyond the row's own name: no quantity, no team name, no\n * drop-off, no notes. ([[GTC-488]] A, the founder's brief of 28 Nov 2026: with the sessions switch\n * on, the dish's session tag too, drawn as the reading panel draws it, so two dishes of one name\n * can be told apart. Still no quantity, team, drop-off or notes.) No history, no message log, no counts of anything — with ONE\n",
     ],
     [
       '                      ) : null}\n',
-      '                      ) : null}\n                      {/* [[GTC-487]] A: the session, as the reading panel draws it; none for a whole-event dish. */}\n                      {row.session ? (\n                        <span\n                          data-surface-session=""\n                          className="rounded bg-white px-1.5 text-[11px] text-[#888780]"\n                        >\n                          {row.session}\n                        </span>\n                      ) : null}\n',
+      '                      ) : null}\n                      {/* [[GTC-488]] A: the session, as the reading panel draws it; none for a whole-event dish. */}\n                      {row.session ? (\n                        <span\n                          data-surface-session=""\n                          className="rounded bg-white px-1.5 text-[11px] text-[#888780]"\n                        >\n                          {row.session}\n                        </span>\n                      ) : null}\n',
     ],
   ],
   'src/components/glance/reading.ts': [
@@ -179,7 +179,7 @@ const CHANGES: Record<string, [string, string][]> = {
     ],
     [
       ' * it reads that way because the alternative is editing her.\n',
-      ' * it reads that way because the alternative is editing her.\n *\n * ⚠ NARROWED, NOT DELETED — [[GTC-487]] (the founder\'s ruling 7, 28 Nov 2026): "A word that is\n * exactly one of the list\'s words, same letters and same case, reads singular at exactly 1. Every\n * other word, and every other amount, reads exactly as stored." Moment 2\'s unit list saves a picked\n * word as a custom unit too, so "1 trays" now reads "1 tray" (`unitWordFor`); "1 big bowl" stays.\n',
+      ' * it reads that way because the alternative is editing her.\n *\n * ⚠ NARROWED, NOT DELETED — [[GTC-488]] (the founder\'s ruling 7, 28 Nov 2026): "A word that is\n * exactly one of the list\'s words, same letters and same case, reads singular at exactly 1. Every\n * other word, and every other amount, reads exactly as stored." Moment 2\'s unit list saves a picked\n * word as a custom unit too, so "1 trays" now reads "1 tray" (`unitWordFor`); "1 big bowl" stays.\n',
     ],
     [
       '    const custom = item.quantityUnitCustom;\n    return custom ? `${amount} ${custom}` : `${amount}`;\n',
@@ -193,7 +193,7 @@ const CHANGES: Record<string, [string, string][]> = {
     ],
     [
       ' * never goes back; 100 once it has. The stage words change on the clock (Q3).\n',
-      " * never goes back; 100 once it has. The stage words change on the clock (Q3).\n *\n * [[GTC-487]] E: the plan screen's Regenerate draws this same bar, with its own screen-reader name\n * (`label`) and spacing (`className`). Left out, both are as Generate has always drawn them.\n",
+      " * never goes back; 100 once it has. The stage words change on the clock (Q3).\n *\n * [[GTC-488]] E: the plan screen's Regenerate draws this same bar, with its own screen-reader name\n * (`label`) and spacing (`className`). Left out, both are as Generate has always drawn them.\n",
     ],
     [
       ' */\nexport function PlanWaitBar({ percent, stage }: { percent: number; stage: string | null }) {\n',
@@ -219,13 +219,13 @@ const CHANGES: Record<string, [string, string][]> = {
     ],
     [
       '    load();\n',
-      "    load();\n  }, [load]);\n\n  /*\n    [[GTC-487]] C — the dates can change elsewhere (the Edit event box on the plan page, another tab),\n    so the card reads its route again when the page comes back into view, is restored from the\n    phone's memory by the back button, or its window gets focus. The same load, the same route. Two\n    of these often come together, so a read is skipped if one began under a second before. The card\n    is never drawn with the sessions switch off, so nothing here runs then.\n  */\n  const lastRead = useRef(0);\n  useEffect(() => {\n    const again = () => {\n      if (document.visibilityState !== 'visible') return;\n      const now = Date.now();\n      if (now - lastRead.current < 1000) return;\n      lastRead.current = now;\n      load();\n    };\n    const restored = (e: PageTransitionEvent) => {\n      if (e.persisted) again();\n    };\n    document.addEventListener('visibilitychange', again);\n    window.addEventListener('pageshow', restored);\n    window.addEventListener('focus', again);\n    return () => {\n      document.removeEventListener('visibilitychange', again);\n      window.removeEventListener('pageshow', restored);\n      window.removeEventListener('focus', again);\n    };\n",
+      "    load();\n  }, [load]);\n\n  /*\n    [[GTC-488]] C — the dates can change elsewhere (the Edit event box on the plan page, another tab),\n    so the card reads its route again when the page comes back into view, is restored from the\n    phone's memory by the back button, or its window gets focus. The same load, the same route. Two\n    of these often come together, so a read is skipped if one began under a second before. The card\n    is never drawn with the sessions switch off, so nothing here runs then.\n  */\n  const lastRead = useRef(0);\n  useEffect(() => {\n    const again = () => {\n      if (document.visibilityState !== 'visible') return;\n      const now = Date.now();\n      if (now - lastRead.current < 1000) return;\n      lastRead.current = now;\n      load();\n    };\n    const restored = (e: PageTransitionEvent) => {\n      if (e.persisted) again();\n    };\n    document.addEventListener('visibilitychange', again);\n    window.addEventListener('pageshow', restored);\n    window.addEventListener('focus', again);\n    return () => {\n      document.removeEventListener('visibilitychange', again);\n      window.removeEventListener('pageshow', restored);\n      window.removeEventListener('focus', again);\n    };\n",
     ],
   ],
   'src/lib/moment3/share-split.ts': [
     [
       ' *\n * CLIENT-SAFE AND PURE: no imports, no writes.\n',
-      ' *\n * CLIENT-SAFE AND PURE: no imports, no writes. ([[GTC-487]], 28 Nov 2026: one import since, the\n * unit words of `src/lib/items/unit-words.ts`, which is pure and imports nothing.)\n',
+      ' *\n * CLIENT-SAFE AND PURE: no imports, no writes. ([[GTC-488]], 28 Nov 2026: one import since, the\n * unit words of `src/lib/items/unit-words.ts`, which is pure and imports nothing.)\n',
     ],
     [
       ' */\n\n/** The most one amount may be: a typing slip, not a real dish. */\n',
@@ -233,7 +233,7 @@ const CHANGES: Record<string, [string, string][]> = {
     ],
     [
       '\n/** An amount and its unit word as a row reads it: "10 servings", "2.5 kg", or "3" with no word. */\n',
-      '\n/**\n * An amount and its unit word as a row reads it: "10 servings", "2.5 kg", or "3" with no word.\n * [[GTC-487]] B: at exactly 1, a word of the plan\'s unit list reads singular ("1 tray"); any other\n * word reads as stored ("1 pavlovas").\n */\n',
+      '\n/**\n * An amount and its unit word as a row reads it: "10 servings", "2.5 kg", or "3" with no word.\n * [[GTC-488]] B: at exactly 1, a word of the plan\'s unit list reads singular ("1 tray"); any other\n * word reads as stored ("1 pavlovas").\n */\n',
     ],
     [
       "  if (amount === null || amount === undefined) return '';\n  return [roundAmount(amount), unitWord].filter((x) => x !== '').join(' ');\n",
@@ -243,7 +243,7 @@ const CHANGES: Record<string, [string, string][]> = {
   'src/lib/setup/plan-wait.ts': [
     [
       "\n/** The bar's percent: the estimate while waiting (never above the cap), 100 once arrived. */\nexport function planWaitPercent(elapsedMs: number, arrived: boolean): number {\n",
-      "\n/**\n * The bar's percent: the estimate while waiting (never above the cap), 100 once arrived.\n * [[GTC-487]] E: `tauMs` is the curve's time constant; left out, it is Generate's (35 s). One\n * category's Regenerate passes `CATEGORY_WAIT_TAU_MS`.\n */\nexport function planWaitPercent(\n  elapsedMs: number,\n  arrived: boolean,\n  tauMs: number = PLAN_WAIT_TAU_MS\n): number {\n",
+      "\n/**\n * The bar's percent: the estimate while waiting (never above the cap), 100 once arrived.\n * [[GTC-488]] E: `tauMs` is the curve's time constant; left out, it is Generate's (35 s). One\n * category's Regenerate passes `CATEGORY_WAIT_TAU_MS`.\n */\nexport function planWaitPercent(\n  elapsedMs: number,\n  arrived: boolean,\n  tauMs: number = PLAN_WAIT_TAU_MS\n): number {\n",
     ],
     [
       '  const t = Math.max(0, Number.isFinite(elapsedMs) ? elapsedMs : 0);\n  return Math.min(PLAN_WAIT_CAP, PLAN_WAIT_CAP * (1 - Math.exp(-t / PLAN_WAIT_TAU_MS)));\n',
@@ -251,7 +251,7 @@ const CHANGES: Record<string, [string, string][]> = {
     ],
     [
       '  return PLAN_WAIT_STAGES[i];\n}\n',
-      "  return PLAN_WAIT_STAGES[i];\n}\n\n/*\n * [[GTC-487]] E — the bar while a Regenerate waits (the founder's rulings 5 and 6, 28 Nov 2026).\n * The whole plan keeps Generate's five words and clock above: it is the same one AI call over the\n * same answers. One category gets four stages and a faster clock (measured at about 30 seconds on\n * the founder's Mac): \"Choosing the dishes…\" and \"Checking dietary needs…\" are left out, because a\n * category can be drinks. The bar is taken away when the wait ends, never filled to 100: the plan\n * view is not told whether the wait ended well.\n */\n\n/** One category's time constant: about 54 per cent at 10 s, 87 at 30 s, 93 at 45 s. */\nexport const CATEGORY_WAIT_TAU_MS = 12_000;\n\n/** One category's four stages, in order (W26 and W27 new; the other two are Generate's). */\nexport const CATEGORY_WAIT_STAGES = [\n  'Reading your answers…',\n  'Choosing new suggestions…',\n  'Working out quantities…',\n  'Putting them in order…',\n] as const;\n\n/** When each of one category's stages begins, in ms after the press: 0, 6, 14 and 22 seconds. */\nexport const CATEGORY_WAIT_STAGE_AT_MS = [0, 6_000, 14_000, 22_000] as const;\n\n/** One category's stage words for the time since the press; the last one stays. */\nexport function categoryWaitStage(elapsedMs: number): (typeof CATEGORY_WAIT_STAGES)[number] {\n  let i = 0;\n  for (let s = 0; s < CATEGORY_WAIT_STAGE_AT_MS.length; s++) {\n    if (elapsedMs >= CATEGORY_WAIT_STAGE_AT_MS[s]) i = s;\n  }\n  return CATEGORY_WAIT_STAGES[i];\n}\n\n/** The bar's name for a screen reader while a Regenerate waits (W24, W25). */\nexport const REGENERATE_WAIT_WORDS = {\n  PLAN: 'Regenerating the plan',\n  category: (name: string) => `Regenerating ${name}`,\n} as const;\n",
+      "  return PLAN_WAIT_STAGES[i];\n}\n\n/*\n * [[GTC-488]] E — the bar while a Regenerate waits (the founder's rulings 5 and 6, 28 Nov 2026).\n * The whole plan keeps Generate's five words and clock above: it is the same one AI call over the\n * same answers. One category gets four stages and a faster clock (measured at about 30 seconds on\n * the founder's Mac): \"Choosing the dishes…\" and \"Checking dietary needs…\" are left out, because a\n * category can be drinks. The bar is taken away when the wait ends, never filled to 100: the plan\n * view is not told whether the wait ended well.\n */\n\n/** One category's time constant: about 54 per cent at 10 s, 87 at 30 s, 93 at 45 s. */\nexport const CATEGORY_WAIT_TAU_MS = 12_000;\n\n/** One category's four stages, in order (W26 and W27 new; the other two are Generate's). */\nexport const CATEGORY_WAIT_STAGES = [\n  'Reading your answers…',\n  'Choosing new suggestions…',\n  'Working out quantities…',\n  'Putting them in order…',\n] as const;\n\n/** When each of one category's stages begins, in ms after the press: 0, 6, 14 and 22 seconds. */\nexport const CATEGORY_WAIT_STAGE_AT_MS = [0, 6_000, 14_000, 22_000] as const;\n\n/** One category's stage words for the time since the press; the last one stays. */\nexport function categoryWaitStage(elapsedMs: number): (typeof CATEGORY_WAIT_STAGES)[number] {\n  let i = 0;\n  for (let s = 0; s < CATEGORY_WAIT_STAGE_AT_MS.length; s++) {\n    if (elapsedMs >= CATEGORY_WAIT_STAGE_AT_MS[s]) i = s;\n  }\n  return CATEGORY_WAIT_STAGES[i];\n}\n\n/** The bar's name for a screen reader while a Regenerate waits (W24, W25). */\nexport const REGENERATE_WAIT_WORDS = {\n  PLAN: 'Regenerating the plan',\n  category: (name: string) => `Regenerating ${name}`,\n} as const;\n",
     ],
   ],
 };
@@ -1006,14 +1006,14 @@ async function main() {
       !/^import\b/m.test(words) &&
       !/fetch|console|XMLHttpRequest|sendBeacon|innerHTML|eval\(|new RegExp/.test(words)
   );
-  const planBack = withoutGtc487PlanView(planSrc);
+  const planBack = withoutGtc488PlanView(planSrc);
   const eachOk = Object.entries(CHANGES).map(([f, pairs]) => {
     const back = takeBack(read(f), pairs);
     return [f, back !== null && back === atBase(f)] as const;
   });
   check(
     'K11',
-    `each edited file is 89da9a3’s with exactly its named changes, byte for byte (the plan view’s ${GTC487_PLAN_VIEW_CHANGES.length})`,
+    `each edited file is 89da9a3’s with exactly its named changes, byte for byte (the plan view’s ${GTC488_PLAN_VIEW_CHANGES.length})`,
     planBack === atBase(F.plan) && eachOk.every(([, ok]) => ok),
     eachOk.filter(([, ok]) => !ok).map(([f]) => f)
   );

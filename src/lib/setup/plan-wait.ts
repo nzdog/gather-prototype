@@ -32,7 +32,7 @@ export const PLAN_WAIT_STAGE_AT_MS = [0, 12_000, 26_000, 42_000, 58_000] as cons
 
 /**
  * The bar's percent: the estimate while waiting (never above the cap), 100 once arrived.
- * [[GTC-487]] E: `tauMs` is the curve's time constant; left out, it is Generate's (35 s). One
+ * [[GTC-488]] E: `tauMs` is the curve's time constant; left out, it is Generate's (35 s). One
  * category's Regenerate passes `CATEGORY_WAIT_TAU_MS`.
  */
 export function planWaitPercent(
@@ -55,7 +55,7 @@ export function planWaitStage(elapsedMs: number): (typeof PLAN_WAIT_STAGES)[numb
 }
 
 /*
- * [[GTC-487]] E — the bar while a Regenerate waits (the founder's rulings 5 and 6, 28 Nov 2026).
+ * [[GTC-488]] E — the bar while a Regenerate waits (the founder's rulings 5 and 6, 28 Nov 2026).
  * The whole plan keeps Generate's five words and clock above: it is the same one AI call over the
  * same answers. One category gets four stages and a faster clock (measured at about 30 seconds on
  * the founder's Mac): "Choosing the dishes…" and "Checking dietary needs…" are left out, because a
