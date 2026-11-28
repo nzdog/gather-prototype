@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { planWaitPercent, planWaitStage } from '@/lib/setup/plan-wait';
+import { unitWordFor } from '@/lib/items/unit-words';
 import MomentArc, { type ArcDoor } from '@/components/plan/MomentArc';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -67,14 +68,27 @@ const SKELETON_CATEGORIES = [
  * [[GTC-385]] (item 58) — the bar under "Putting your plan together...", and the stage words under
  * it. An estimate (src/lib/setup/plan-wait.ts): it never passes 95 before the plan has arrived and
  * never goes back; 100 once it has. The stage words change on the clock (Q3).
+ *
+ * [[GTC-488]] E: the plan screen's Regenerate draws this same bar, with its own screen-reader name
+ * (`label`) and spacing (`className`). Left out, both are as Generate has always drawn them.
  */
-export function PlanWaitBar({ percent, stage }: { percent: number; stage: string | null }) {
+export function PlanWaitBar({
+  percent,
+  stage,
+  label = 'Putting your plan together',
+  className = '-mt-4 mb-6',
+}: {
+  percent: number;
+  stage: string | null;
+  label?: string;
+  className?: string;
+}) {
   const p = Math.max(0, Math.min(100, Math.round(percent)));
   return (
-    <div data-plan-wait className="-mt-4 mb-6">
+    <div data-plan-wait className={className}>
       <div
         role="progressbar"
-        aria-label="Putting your plan together"
+        aria-label={label}
         aria-valuemin={0}
         aria-valuemax={100}
         aria-valuenow={p}
@@ -244,7 +258,7 @@ export default function Moment2Step2Skeleton({
                         <span className="flex-1">{item.name}</span>
                         <span className="text-gray-500 whitespace-nowrap">{item.servingSize}</span>
                         <span className="text-gray-400 whitespace-nowrap">
-                          {item.quantity} {item.unit}
+                          {item.quantity} {unitWordFor(item.quantity, item.unit ?? '')}
                         </span>
                       </div>
                     ))}

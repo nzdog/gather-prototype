@@ -71,6 +71,23 @@ const MERGED_MAIN = 'b7f3e76';
  * GTC-483's K2 and K4. K6's "none untracked" still reads the working folder.
  */
 const GTC482_MERGED = '89da9a3';
+/**
+ * ⚠ [[GTC-488]] (28 Nov 2026, the founder's word on its plan: "yes to all 13 moves as you describe
+ * them, each the narrowest way with a dated note naming GTC-487",
+ * this ticket's number until 28 Nov 2026). GTC-488 edits nine source files after GTC-482's merge
+ * (89da9a3), two of them on UNTOUCHED's list (the setup page and the Generate screen), and adds
+ * its own script line. It had moved K6 and K9 to read the tree at that merge. GTC-487 (the
+ * potatoes paragraph) made the same move and was merged first, so at the merge of main into this
+ * branch (28 Nov 2026) this ticket's copy of it was dropped for main's, above. Its own move is
+ * K10: those two files out of the live list by name, checked unchanged from c8b9b42 to that merge
+ * (GTC488_BASE). Everything else on UNTOUCHED, and the untracked and package-lock.json halves,
+ * still read the working folder.
+ */
+const GTC488_BASE = '89da9a3';
+const GTC488_OUT_OF_UNTOUCHED = [
+  'src/app/plan/[eventId]/setup/page.tsx',
+  'src/components/plan/Moment2Step2Skeleton.tsx',
+];
 const VAR = 'GATHER_SESSIONS';
 const FIXTURE_FILE =
   process.env.GTC482_FIXTURE_FILE ?? path.join(os.tmpdir(), `gtc482-drafting-${TAG}.json`);
@@ -1655,7 +1672,16 @@ async function main() {
   check(
     `K${++k}`,
     'the send, the nudges, the decide-by clock, the opt-outs, the guest page, Moment 2’s screens, auth, the sessions code, claude.ts and the cap: byte for byte c8b9b42’s',
-    gitOk(['diff', '--quiet', MAIN, '--', ...UNTOUCHED])
+    // [[GTC-488]]: its two files out of the live list by name, unchanged c8b9b42 to its merge.
+    GTC488_OUT_OF_UNTOUCHED.every((f) => UNTOUCHED.includes(f)) &&
+      gitOk(['diff', '--quiet', MAIN, GTC488_BASE, '--', ...GTC488_OUT_OF_UNTOUCHED]) &&
+      gitOk([
+        'diff',
+        '--quiet',
+        MAIN,
+        '--',
+        ...UNTOUCHED.filter((f) => !GTC488_OUT_OF_UNTOUCHED.includes(f)),
+      ])
   );
   const readers = (
     git([

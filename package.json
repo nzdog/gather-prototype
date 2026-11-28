@@ -226,7 +226,8 @@
     "test:sessions-release": "tsx --tsconfig tests/tsconfig.json tests/sessions-release-test.tsx",
     "test:demo-entry": "tsx --tsconfig tests/tsconfig.json tests/demo-entry-test.tsx",
     "test:sessions-drafting": "tsx --tsconfig tests/tsconfig.json tests/sessions-drafting-test.ts",
-    "test:demo-potatoes": "tsx --tsconfig tests/tsconfig.json tests/demo-potatoes-test.tsx"
+    "test:demo-potatoes": "tsx --tsconfig tests/tsconfig.json tests/demo-potatoes-test.tsx",
+    "test:small-fixes-batch": "tsx --tsconfig tests/tsconfig.json tests/small-fixes-batch-test.tsx"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

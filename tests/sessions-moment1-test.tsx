@@ -990,9 +990,31 @@ async function main() {
       '              dayId: newItem.dayId ?? null,',
     ].join('\n') + '\n',
   ];
+  /*
+    ⚠ [[GTC-488]] (28 Nov 2026, the founder's word on its plan: "yes to all 13 moves as you describe
+    them, each the narrowest way with a dated note naming GTC-487",
+    this ticket's number until 28 Nov 2026). GTC-488 changes one line of the
+    setup page and adds two (B: Moment 3's row reads "1 tray"), and adds one import. Each of its
+    changes, [was, is], must occur exactly once and is taken back first; then GTC-480's insertions
+    as before. Still the working folder, still byte for byte.
+  */
+  const GTC488_SETUP_CHANGES: [string, string][] = [
+    [
+      "import { shownMarks } from '@/lib/items/dish-marks';\n",
+      "import { shownMarks } from '@/lib/items/dish-marks';\nimport { unitWordFor } from '@/lib/items/unit-words';\n",
+    ],
+    [
+      "          const amountAndUnit = [item.quantityAmount ?? '', mapItemUnitToDisplay(item)]\n",
+      '          // [[GTC-488]] B: "1 tray", not "1 trays", on Moment 3\'s row and its Details box.\n          const unitWord = unitWordFor(item.quantityAmount, mapItemUnitToDisplay(item));\n          const amountAndUnit = [item.quantityAmount ?? \'\', unitWord]\n',
+    ],
+  ];
   let setupSame = false;
   try {
-    const now = read(F.setup);
+    const live = read(F.setup);
+    const now = GTC488_SETUP_CHANGES.reduce(
+      (out, [was, is]) => (out.split(is).length === 2 ? out.replace(is, () => was) : ''),
+      live
+    );
     const base = execFileSync('git', ['show', `${BASE}:${F.setup}`], {
       cwd: ROOT,
       encoding: 'utf8',
@@ -1006,7 +1028,7 @@ async function main() {
   }
   check(
     'U3',
-    'the setup page itself is not edited (as the base, byte for byte), but for GTC-480’s eight named insertions, each exactly once',
+    'the setup page itself is not edited (as the base, byte for byte), but for GTC-480’s eight named insertions and GTC-488’s two named changes, each exactly once',
     setupSame
   );
   const Provider = SW?.SessionsSwitchProvider;

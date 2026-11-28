@@ -401,6 +401,34 @@ const K_HUNKS: Record<string, [string, string][]> = {
   ],
 };
 
+/**
+ * ⚠ [[GTC-488]] (28 Nov 2026, the founder's word on its plan: "yes to all 13 moves as you describe
+ * them, each the narrowest way with a dated note naming GTC-487",
+ * this ticket's number until 28 Nov 2026). GTC-488 edits two files this
+ * suite holds: reading.ts (B, the board's label reads "1 tray" for a word of the unit list) and
+ * PersonSurface.tsx (A, the red panel draws the session tag). K11 still reads reading.ts in the
+ * working folder: 8454fed plus GTC-485's two named hunks plus GTC-488's three, each exactly once.
+ * F7 checks PersonSurface.tsx unchanged from 8454fed to GTC-488's base (89da9a3); GlanceBoard.tsx
+ * still reads the working folder.
+ */
+const GTC488_BASE = '89da9a3';
+const GTC488_HUNKS: Record<string, [string, string][]> = {
+  'src/components/glance/reading.ts': [
+    [
+      "import { CHASE_DOOR_LINK, chaseDoorHref } from '@/lib/preflight/after-press-words';\n",
+      "import { CHASE_DOOR_LINK, chaseDoorHref } from '@/lib/preflight/after-press-words';\nimport { unitWordFor } from '@/lib/items/unit-words';\n",
+    ],
+    [
+      ' * it reads that way because the alternative is editing her.\n */\n',
+      ' * it reads that way because the alternative is editing her.\n *\n * ⚠ NARROWED, NOT DELETED — [[GTC-488]] (the founder\'s ruling 7, 28 Nov 2026): "A word that is\n * exactly one of the list\'s words, same letters and same case, reads singular at exactly 1. Every\n * other word, and every other amount, reads exactly as stored." Moment 2\'s unit list saves a picked\n * word as a custom unit too, so "1 trays" now reads "1 tray" (`unitWordFor`); "1 big bowl" stays.\n */\n',
+    ],
+    [
+      '    return custom ? `${amount} ${custom}` : `${amount}`;\n',
+      '    return custom ? `${amount} ${unitWordFor(amount, custom)}` : `${amount}`;\n',
+    ],
+  ],
+};
+
 function applyHunks(base: string, hunks: [string, string][]): string | null {
   let s = base;
   for (const [a, b] of hunks) {
@@ -833,14 +861,9 @@ async function main() {
   check(
     'F7',
     'the tapped surface and the board’s frame are not changed (the reading list only)',
-    git([
-      'diff',
-      '--quiet',
-      BASE,
-      '--',
-      'src/components/glance/PersonSurface.tsx',
-      'src/components/glance/GlanceBoard.tsx',
-    ]) !== null
+    // [[GTC-488]]: PersonSurface.tsx from 8454fed to GTC-488's base; see the note there.
+    git(['diff', '--quiet', BASE, GTC488_BASE, '--', 'src/components/glance/PersonSurface.tsx']) !==
+      null && git(['diff', '--quiet', BASE, '--', 'src/components/glance/GlanceBoard.tsx']) !== null
   );
 
   // ══ E — the guest page ════════════════════════════════════════════════════════════════════
@@ -969,10 +992,12 @@ async function main() {
   for (const [file, hunks] of Object.entries(K_HUNKS)) {
     k++;
     const base = atBase(file);
-    const want = base.length > 0 ? applyHunks(base, hunks) : null;
+    // [[GTC-488]]: its named hunks after GTC-485's, for the files it edits; see the note there.
+    const later = GTC488_HUNKS[file] ?? [];
+    const want = base.length > 0 ? applyHunks(base, [...hunks, ...later]) : null;
     check(
       `K${k}`,
-      `${file}: 8454fed plus exactly its ${hunks.length} named hunk(s)`,
+      `${file}: 8454fed plus exactly its ${hunks.length} named hunk(s)${later.length > 0 ? ` and GTC-488's ${later.length}` : ''}`,
       want !== null && (READ_AT_MERGE.includes(file) ? atMerged(file) : read(file)) === want
     );
   }

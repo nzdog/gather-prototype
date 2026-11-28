@@ -31,6 +31,15 @@ import {
   useSessionChoice,
   useSessionTabs,
 } from '@/components/sessions/SessionTabs';
+import { PlanWaitBar } from './Moment2Step2Skeleton';
+import {
+  CATEGORY_WAIT_TAU_MS,
+  REGENERATE_WAIT_WORDS,
+  categoryWaitStage,
+  planWaitPercent,
+  planWaitStage,
+} from '@/lib/setup/plan-wait';
+import { unitWordFor } from '@/lib/items/unit-words';
 
 // ─── Public types ────────────────────────────────────────────────────────────
 
@@ -132,6 +141,17 @@ interface Moment2PlanViewProps {
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
+/** [[GTC-488]] D: the bar's fold words (the founder's ruling 6, 28 Nov 2026: W19, W20, W21, W23). */
+export const PLAN_BAR_WORDS = {
+  LESS: 'Less ▾',
+  LESS_NAME: 'Show fewer buttons',
+  MORE: 'More ▴',
+  MORE_NAME: 'Show all the buttons',
+} as const;
+
+/** [[GTC-488]] D (ruling 4): where this device keeps her choice, one name for all her events. */
+export const PLAN_BAR_FOLDED_KEY = 'gather.planBarFolded';
+
 const COMMON_UNITS = [
   'kg',
   'g',
@@ -192,6 +212,65 @@ export default function Moment2PlanView({
   const [showAddCategory, setShowAddCategory] = useState(false);
   const [selectedItemIds, setSelectedItemIds] = useState<Set<string>>(new Set());
   const [bulkRemoving, setBulkRemoving] = useState(false);
+
+  /*
+    [[GTC-488]] D — the bar folds away when she taps (rulings 2 and 3), and stays as she left it on
+    this device (ruling 4: the browser's own storage, one name for all her events; nothing in the
+    database, nothing sent). It is drawn open first, as the server draws it, then read.
+  */
+  const [barFolded, setBarFolded] = useState(false);
+  useEffect(() => {
+    try {
+      if (window.localStorage.getItem(PLAN_BAR_FOLDED_KEY) === '1') setBarFolded(true);
+    } catch {
+      // A browser that keeps nothing starts open.
+    }
+  }, []);
+  const foldBar = (folded: boolean) => {
+    setBarFolded(folded);
+    try {
+      if (folded) window.localStorage.setItem(PLAN_BAR_FOLDED_KEY, '1');
+      else window.localStorage.removeItem(PLAN_BAR_FOLDED_KEY);
+    } catch {
+      // Not kept; it still folds for this visit.
+    }
+  };
+  // The room below the page follows the bar's real height, open or folded, so no control can sit
+  // behind it when the page is scrolled to its end (the GTC-364 shape).
+  const barRef = useRef<HTMLDivElement | null>(null);
+  const [barHeight, setBarHeight] = useState(0);
+  useEffect(() => {
+    const bar = barRef.current;
+    if (!bar || typeof ResizeObserver === 'undefined') return;
+    const measure = () => setBarHeight(bar.getBoundingClientRect().height);
+    measure();
+    const watch = new ResizeObserver(measure);
+    watch.observe(bar);
+    return () => watch.disconnect();
+  }, []);
+
+  // [[GTC-488]] E — Generate's clock while a Regenerate waits: the time since the press, never less
+  // than it was, so the bar cannot go back.
+  const [waitMs, setWaitMs] = useState(0);
+  useEffect(() => {
+    setWaitMs(0);
+    if (regeneratingScope === null) return;
+    const start = Date.now();
+    const timer = setInterval(() => {
+      setWaitMs((prev) => Math.max(prev, Date.now() - start));
+    }, 250);
+    return () => clearInterval(timer);
+  }, [regeneratingScope]);
+  // One category's bar, only in the category that is regenerating (ruling 5).
+  const categoryWait = (name: string) => {
+    const key = ownPlan ? null : (LABEL_TO_KEY[name] ?? null);
+    if (key === null || regeneratingScope !== key) return undefined;
+    return {
+      percent: planWaitPercent(waitMs, false, CATEGORY_WAIT_TAU_MS),
+      stage: categoryWaitStage(waitMs),
+      label: REGENERATE_WAIT_WORDS.category(name),
+    };
+  };
 
   const totalItems = categories.reduce((sum, c) => sum + c.items.length, 0);
   // [[GTC-385]] (item 59, Q10): the key shows only when at least one dish is marked.
@@ -349,6 +428,14 @@ export default function Moment2PlanView({
               : 'Not quite right? Regenerate the plan'}
           </button>
         )}
+        {/* [[GTC-488]] E: Generate's bar under the button while the whole plan regenerates. */}
+        {regeneratingScope === 'plan' && (
+          <PlanWaitBar
+            percent={planWaitPercent(waitMs, false)}
+            stage={planWaitStage(waitMs)}
+            label={REGENERATE_WAIT_WORDS.PLAN}
+          />
+        )}
         {/* [[GTC-480]] A: the session tabs; nothing is drawn while there are none. */}
         <SessionTabRow tabs={sessionTabs} />
 
@@ -394,6 +481,7 @@ export default function Moment2PlanView({
               categoryKey={ownPlan ? null : (LABEL_TO_KEY[category.name] ?? null)}
               regeneratingScope={regeneratingScope}
               onRegenerateCategory={onRegenerateCategory}
+              wait={categoryWait(category.name)}
             />
           ))}
         </div>
@@ -412,6 +500,9 @@ export default function Moment2PlanView({
             </button>
           )}
         </div>
+        {/* [[GTC-488]] D: room for the bar beyond the page's own 128 px, so the last control can
+            always sit above it, open or folded. */}
+        <div aria-hidden="true" style={{ height: Math.max(0, Math.ceil(barHeight) + 16 - 128) }} />
       </div>
 
       {/* Floating bulk-action button */}
@@ -435,13 +526,45 @@ export default function Moment2PlanView({
       )}
 
       {/* Sticky footer */}
-      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 p-4">
+      <div
+        ref={barRef}
+        data-plan-bar={barFolded ? 'folded' : 'open'}
+        className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 p-4"
+      >
+        {/* [[GTC-488]] D: the fold control, a slim row on top of the open bar (ruling 2, option 1). */}
+        {!barFolded && (
+          <div className="max-w-2xl mx-auto -mt-3 mb-1 flex justify-center">
+            <button
+              type="button"
+              data-plan-bar-less=""
+              onClick={() => foldBar(true)}
+              aria-label={PLAN_BAR_WORDS.LESS_NAME}
+              aria-expanded="true"
+              className="px-3 py-1 text-xs text-gray-500 hover:text-gray-800"
+            >
+              {PLAN_BAR_WORDS.LESS}
+            </button>
+          </div>
+        )}
         <div className="max-w-2xl mx-auto flex items-center justify-between gap-3">
+          {/* [[GTC-488]] D: folded, one slim row: More, and "Plan looks good" still in reach. */}
+          {barFolded && (
+            <button
+              type="button"
+              data-plan-bar-more=""
+              onClick={() => foldBar(false)}
+              aria-label={PLAN_BAR_WORDS.MORE_NAME}
+              aria-expanded="false"
+              className="text-sm text-gray-600 hover:text-gray-900 px-3 py-2"
+            >
+              {PLAN_BAR_WORDS.MORE}
+            </button>
+          )}
           <button
             type="button"
             onClick={onBack}
             disabled={regeneratingScope !== null}
-            className="text-sm text-gray-600 hover:text-gray-900 px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            className={`text-sm text-gray-600 hover:text-gray-900 px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed${barFolded ? ' hidden' : ''}`}
           >
             {/* [[GTC-367]] (item 31, W3): it opens the questions, so it says so (plan Q8).
                 [[GTC-382]] (Q3): her own plan's back goes to Moment 2's opening, and says W10. */}
@@ -459,7 +582,9 @@ export default function Moment2PlanView({
         {/* GTC-235: the exit. Named for what is behind it rather than for the surface,
             because "dashboard" is a word for the thing she wants, not the thing she
             wants to do. */}
-        <div className="max-w-2xl mx-auto pt-2 flex flex-wrap items-baseline justify-center gap-x-4 gap-y-1 text-center">
+        <div
+          className={`max-w-2xl mx-auto pt-2 flex flex-wrap items-baseline justify-center gap-x-4 gap-y-1 text-center${barFolded ? ' hidden' : ''}`}
+        >
           <button
             type="button"
             onClick={onGoToDashboard}
@@ -525,6 +650,8 @@ interface CategorySectionProps {
   categoryKey: string | null;
   regeneratingScope: 'plan' | string | null;
   onRegenerateCategory: (categoryKey: string) => void;
+  /** [[GTC-488]] E: this category's own bar while it regenerates; absent otherwise. */
+  wait?: { percent: number; stage: string; label: string };
 }
 
 function CategorySection({
@@ -549,6 +676,7 @@ function CategorySection({
   categoryKey,
   regeneratingScope,
   onRegenerateCategory,
+  wait,
 }: CategorySectionProps) {
   const itemCount = category.items.length;
   // [[GTC-385]] (item 59, Q7, Q12): no marks and no ticks in the two drinks sections or on a job.
@@ -556,8 +684,14 @@ function CategorySection({
   const isRegenerating =
     regeneratingScope === 'plan' || (categoryKey !== null && regeneratingScope === categoryKey);
 
+  // [[GTC-488]] E: while its own bar shows, the section neither pulses nor greys (the bar would fade
+  // with it); its rows still cannot be tapped.
+  const regeneratingLook = wait
+    ? 'pointer-events-none'
+    : 'animate-pulse opacity-60 pointer-events-none';
+
   return (
-    <div className={isRegenerating ? 'animate-pulse opacity-60 pointer-events-none' : undefined}>
+    <div className={isRegenerating ? regeneratingLook : undefined}>
       <button
         type="button"
         onClick={onToggleCollapsed}
@@ -640,6 +774,15 @@ function CategorySection({
                         : '↻ Regenerate this category'}
                     </button>
                   </div>
+                )}
+                {/* [[GTC-488]] E: Generate's bar under the button while this category regenerates. */}
+                {wait && (
+                  <PlanWaitBar
+                    percent={wait.percent}
+                    stage={wait.stage}
+                    label={wait.label}
+                    className="mt-1 mb-2"
+                  />
                 )}
               </div>
             )}
@@ -745,7 +888,7 @@ function ItemRow({
           className={`text-sm text-gray-600 whitespace-nowrap px-2 py-1 rounded hover:bg-gray-200 transition-colors ${markedStrike}`}
           aria-label="Edit quantity"
         >
-          {item.quantity} {item.unit}
+          {item.quantity} {unitWordFor(item.quantity, item.unit)}
         </button>
       )}
 

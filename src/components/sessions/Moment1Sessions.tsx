@@ -13,7 +13,7 @@
  * on the server; the card compares and shows those, never a stored time.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useSessionsOn } from '@/components/sessions/SessionsSwitch';
 import { CARD_WORDS } from '@/lib/sessions/card-words';
 import { datesFrom, sessionDateWords } from '@/lib/sessions/dates';
@@ -86,6 +86,35 @@ export function SessionsCard({ eventId, initial }: { eventId: string; initial?: 
 
   useEffect(() => {
     load();
+  }, [load]);
+
+  /*
+    [[GTC-488]] C — the dates can change elsewhere (the Edit event box on the plan page, another tab),
+    so the card reads its route again when the page comes back into view, is restored from the
+    phone's memory by the back button, or its window gets focus. The same load, the same route. Two
+    of these often come together, so a read is skipped if one began under a second before. The card
+    is never drawn with the sessions switch off, so nothing here runs then.
+  */
+  const lastRead = useRef(0);
+  useEffect(() => {
+    const again = () => {
+      if (document.visibilityState !== 'visible') return;
+      const now = Date.now();
+      if (now - lastRead.current < 1000) return;
+      lastRead.current = now;
+      load();
+    };
+    const restored = (e: PageTransitionEvent) => {
+      if (e.persisted) again();
+    };
+    document.addEventListener('visibilitychange', again);
+    window.addEventListener('pageshow', restored);
+    window.addEventListener('focus', again);
+    return () => {
+      document.removeEventListener('visibilitychange', again);
+      window.removeEventListener('pageshow', restored);
+      window.removeEventListener('focus', again);
+    };
   }, [load]);
 
   if (!state) return null;

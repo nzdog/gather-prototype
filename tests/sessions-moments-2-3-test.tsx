@@ -660,9 +660,30 @@ async function main() {
       count(setupSrc, '...(newItem.dayId ? { dayId: newItem.dayId } : {}),') === 1 &&
       count(setupSrc, '...(updates.dayId !== undefined ? { dayId: updates.dayId } : {}),') === 1
   );
+  /*
+    ⚠ [[GTC-488]] (28 Nov 2026, the founder's word on its plan: "yes to all 13 moves as you describe
+    them, each the narrowest way with a dated note naming GTC-487",
+    this ticket's number until 28 Nov 2026). GTC-488 changes six lines of the
+    base in these two files: B, Moment 3's row words and a plan row's words; D, the bar's frame, its
+    back button and its second row, for the fold; E, one category's look while its own bar shows.
+    W5 still reads the working folder: the base's lines removed must be exactly these six, each
+    once, and nothing else.
+  */
+  const GTC488_REMOVED: Record<string, string[]> = {
+    [F.setup]: [
+      "          const amountAndUnit = [item.quantityAmount ?? '', mapItemUnitToDisplay(item)]",
+    ],
+    [F.plan]: [
+      '      <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 p-4">',
+      '            className="text-sm text-gray-600 hover:text-gray-900 px-3 py-2 disabled:opacity-50 disabled:cursor-not-allowed"',
+      '        <div className="max-w-2xl mx-auto pt-2 flex flex-wrap items-baseline justify-center gap-x-4 gap-y-1 text-center">',
+      "    <div className={isRegenerating ? 'animate-pulse opacity-60 pointer-events-none' : undefined}>",
+      '          {item.quantity} {item.unit}',
+    ],
+  };
   check(
     'W5',
-    "the setup page, the plan view and Moment 3's mappers: every line this ticket added is an addition; no line of the base is changed",
+    "the setup page, the plan view and Moment 3's mappers: every line this ticket added is an addition; no line of the base is changed, but GTC-488's six named changes",
     (() => {
       for (const rel of [F.setup, F.plan]) {
         const d = execFileSync('git', ['diff', '--unified=0', BASE, '--', rel], {
@@ -671,7 +692,12 @@ async function main() {
         });
         const removedLines = d.split('\n').filter((l) => l.startsWith('-') && !l.startsWith('---'));
         const addedLines = d.split('\n').filter((l) => l.startsWith('+') && !l.startsWith('+++'));
-        if (removedLines.length !== 0 || addedLines.length === 0) return false;
+        // [[GTC-488]]: exactly its named lines, each once; see the note above.
+        const removed = removedLines.map((l) => l.slice(1)).sort();
+        const named = [...(GTC488_REMOVED[rel] ?? [])].sort();
+        if (JSON.stringify(removed) !== JSON.stringify(named) || addedLines.length === 0) {
+          return false;
+        }
       }
       return true;
     })()

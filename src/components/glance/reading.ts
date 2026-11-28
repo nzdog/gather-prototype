@@ -34,6 +34,7 @@ import {
 } from '@/lib/glance/state';
 import { personDoorHref } from '@/lib/events/home-href';
 import { CHASE_DOOR_LINK, chaseDoorHref } from '@/lib/preflight/after-press-words';
+import { unitWordFor } from '@/lib/items/unit-words';
 
 export interface ReadingRow {
   itemId: string;
@@ -208,6 +209,11 @@ export function nudgeDayFor(person: GlancePerson, now: Date): string | null {
  * someone's free text is inventing — "2 big bowl" is her wording and "2 big bowls" is ours.
  * Stated rather than discovered: this is the one place a quantity can read ungrammatically, and
  * it reads that way because the alternative is editing her.
+ *
+ * ⚠ NARROWED, NOT DELETED — [[GTC-488]] (the founder's ruling 7, 28 Nov 2026): "A word that is
+ * exactly one of the list's words, same letters and same case, reads singular at exactly 1. Every
+ * other word, and every other amount, reads exactly as stored." Moment 2's unit list saves a picked
+ * word as a custom unit too, so "1 trays" now reads "1 tray" (`unitWordFor`); "1 big bowl" stays.
  */
 const UNIT_SINGULAR: Record<string, string> = {
   TRAYS: 'tray',
@@ -243,7 +249,7 @@ export function quantityLabel(
   if (item.quantityUnit === 'COUNT' || item.quantityUnit === null) return `${amount}`;
   if (item.quantityUnit === 'CUSTOM') {
     const custom = item.quantityUnitCustom;
-    return custom ? `${amount} ${custom}` : `${amount}`;
+    return custom ? `${amount} ${unitWordFor(amount, custom)}` : `${amount}`;
   }
   const word = amount === 1 ? (UNIT_SINGULAR[item.quantityUnit] ?? null) : null;
   return `${amount} ${(word ?? item.quantityUnit).toLowerCase()}`;
