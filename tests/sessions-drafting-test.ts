@@ -63,14 +63,25 @@ const MAIN = 'c8b9b42'; // origin/main when GTC-482 began (the merge of GTC-483)
  */
 const MERGED_MAIN = 'b7f3e76';
 /**
+ * ⚠ [[GTC-487]] (28 Nov 2026, the founder's ruling: "If any existing check pins the page's shape
+ * and has to be widened, widen it as narrowly as you can and list each one for me"). GTC-487 edits
+ * src/app/demo/page.tsx and adds its own script line, so K6 and K9, which still read the working
+ * folder, turned red. They now read the tree as GTC-482 merged it into main (GTC482_MERGED, the
+ * merge of pull request #128), compared with MERGED_MAIN as before, exactly as GTC-486 moved
+ * GTC-483's K2 and K4. K6's "none untracked" still reads the working folder.
+ */
+const GTC482_MERGED = '89da9a3';
+/**
  * ⚠ [[GTC-488]] (28 Nov 2026, the founder's word on its plan: "yes to all 13 moves as you describe
  * them, each the narrowest way with a dated note naming GTC-487",
- * this ticket's number until 28 Nov 2026). GTC-488 edits nine source files
- * after this ticket's merge (89da9a3), two of them on UNTOUCHED's list (the setup page and the
- * Generate screen), and adds its own script line. So K6 and K9, this ticket's claims about its own
- * files and package.json lines, read the tree at its merge (GTC488_BASE) instead of the working
- * folder, and K10 checks those two files unchanged from c8b9b42 to that merge. Everything else on
- * UNTOUCHED, and the untracked and package-lock.json halves, still read the working folder.
+ * this ticket's number until 28 Nov 2026). GTC-488 edits nine source files after GTC-482's merge
+ * (89da9a3), two of them on UNTOUCHED's list (the setup page and the Generate screen), and adds
+ * its own script line. It had moved K6 and K9 to read the tree at that merge. GTC-487 (the
+ * potatoes paragraph) made the same move and was merged first, so at the merge of main into this
+ * branch (28 Nov 2026) this ticket's copy of it was dropped for main's, above. Its own move is
+ * K10: those two files out of the live list by name, checked unchanged from c8b9b42 to that merge
+ * (GTC488_BASE). Everything else on UNTOUCHED, and the untracked and package-lock.json halves,
+ * still read the working folder.
  */
 const GTC488_BASE = '89da9a3';
 const GTC488_OUT_OF_UNTOUCHED = [
@@ -1610,8 +1621,8 @@ async function main() {
     );
   }
   // [[GTC-486]]: against main as merged in (MERGED_MAIN); see the note there.
-  // [[GTC-488]]: the tree at this ticket's merge (GTC488_BASE); see the note there.
-  const changed = (git(['diff', '--name-only', MERGED_MAIN, GTC488_BASE, '--', 'src']) ?? 'x')
+  // [[GTC-487]]: the tree as GTC-482 merged it (GTC482_MERGED), not the working folder.
+  const changed = (git(['diff', '--name-only', MERGED_MAIN, GTC482_MERGED, '--', 'src']) ?? 'x')
     .split('\n')
     .filter(Boolean)
     .sort();
@@ -1642,9 +1653,9 @@ async function main() {
     routesAt(null).length > 100 && same(routesAt(null), routesAt(MAIN))
   );
   // [[GTC-486]]: against main as merged in (MERGED_MAIN); see the note there.
-  // [[GTC-488]]: the tree at this ticket's merge (GTC488_BASE); see the note there.
+  // [[GTC-487]]: the tree as GTC-482 merged it (GTC482_MERGED), not the working folder.
   const pkgDiff = (
-    git(['diff', '-U0', '--no-color', MERGED_MAIN, GTC488_BASE, '--', 'package.json']) ?? ''
+    git(['diff', '-U0', '--no-color', MERGED_MAIN, GTC482_MERGED, '--', 'package.json']) ?? ''
   )
     .split('\n')
     .filter((l) => /^[+-]/.test(l) && !/^(\+\+\+|---)/.test(l));

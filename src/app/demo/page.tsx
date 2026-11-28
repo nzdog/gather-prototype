@@ -22,6 +22,16 @@ const UNDER_CONSTRUCTION = 'Under construction';
 const LEAD = 'Because those potatoes won’t bring themselves to lunch.';
 /** [[GTC-486]] A, wording A1 (founder, 26 Nov 2026): the line under the button. */
 const START_LINE = 'Start your own sample event. Nothing is sent to anyone.';
+/**
+ * [[GTC-487]] (founder, 28 Nov 2026): two short paragraphs "directly under the line 'Start your
+ * own sample event. Nothing is sent to anyone.'", the words exactly as ruled, with the page's own
+ * curly apostrophe. Paragraph 1:
+ */
+const STORY =
+  'Last Christmas, Elizabeth’s spreadsheet, lovingly crafted, asked Jeremy to bring the salad and the potatoes. Jeremy is not good with spreadsheets. He only saw the salad. There were no potatoes. Some are now calling it Potatogate.';
+/** [[GTC-487]] paragraph 2. */
+const STORY_GATHER =
+  'Gather would have sent Jeremy one message: bring the salad and the potatoes. There would have been potatoes.';
 
 /**
  * /demo — [[GTC-394]] tweak 3, and [[GTC-395]] items 1 and 2 (founder, 20 Oct 2026: "Don't have the
@@ -55,6 +65,11 @@ const START_LINE = 'Start your own sample event. Nothing is sent to anyone.';
  * first. All of it in the switch's one branch, so "Under construction" still stands alone. No
  * button is stuck to the screen: it would cover the steps while they are being read.
  *
+ * [[GTC-487]] (founder ruling, 28 Nov 2026): two short paragraphs under the line beneath the
+ * button tell the story behind the campaign line before a visitor reaches the steps. "Quiet body
+ * text, smaller than the headline, in the page's existing style. No box, no picture, no new
+ * colour." Held by tests/demo-potatoes-test.tsx.
+ *
  * The "Sarah demo" button and its handler went with GTC-395; the route's no-body path and the
  * tokens route went with [[GTC-442]]. The reset route still exists, answers 404 in production, and
  * elsewhere force-resets whichever database the server points at; this page never calls it.
@@ -86,6 +101,13 @@ export default async function DemoLandingPage(props: VisitPageProps) {
                 >
                   {START_LINE}
                 </p>
+              </div>
+              <div
+                data-demo-story=""
+                className="mx-auto mt-3 w-full max-w-sm space-y-3 text-sm leading-relaxed text-balance text-warm-grey-700"
+              >
+                <p>{STORY}</p>
+                <p>{STORY_GATHER}</p>
               </div>
               <DemoExplainer />
               <div data-demo-foot="" className="mx-auto mt-8 w-full max-w-sm">

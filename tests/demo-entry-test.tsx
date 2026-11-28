@@ -15,6 +15,13 @@
  * bring themselves to lunch.", replacing D's words, with the curly apostrophe; nothing else on the
  * page changes.
  *
+ * ⚠ [[GTC-487]] (28 Nov 2026, the founder's ruling: two short paragraphs "directly under the line
+ * 'Start your own sample event. Nothing is sent to anyone.'", and "If any existing check pins the
+ * page's shape and has to be widened, widen it as narrowly as you can"). R2 (every visible word)
+ * and R4 (what follows the first button, up to the steps) pinned the page's words exactly, so each
+ * now lets in GTC-487's two paragraphs, in that one place, and nothing else. The paragraphs
+ * themselves are held by tests/demo-potatoes-test.tsx. Every other check is as GTC-486 left it.
+ *
  * Ruling E (the sample's start page counted as a fourth page) is held by tests/page-visit-test.ts
  * (U6, S9, S10); the privacy page's words by tests/privacy-words-test.ts.
  *
@@ -67,6 +74,13 @@ const OLD_LEAD = 'You’re onto it. Finally, you can show them.';
 const START_LINE = 'Start your own sample event. Nothing is sent to anyone.';
 /** A1, the intro. */
 const INTRO = 'Rather read first? Each step below shows what happens.';
+/**
+ * [[GTC-487]] (28 Nov 2026): the two paragraphs under the line beneath the button, as ruled,
+ * joined as the page's visible words read them (two paragraphs, no space between).
+ */
+const GTC487_STORY =
+  'Last Christmas, Elizabeth’s spreadsheet, lovingly crafted, asked Jeremy to bring the salad and the potatoes. Jeremy is not good with spreadsheets. He only saw the salad. There were no potatoes. Some are now calling it Potatogate.' +
+  'Gather would have sent Jeremy one message: bring the salad and the potatoes. There would have been potatoes.';
 /** A1: removed. */
 const TAP_A_STEP = 'Tap a step to open it';
 const HEADING = 'Gather';
@@ -330,12 +344,14 @@ const CHECKS: Check[] = [
   {
     layer: 'R',
     label:
-      'R2 every visible word on the page: the heading, the D line, the button, the line under it, the explainer, the button again; nothing more',
+      "R2 every visible word on the page: the heading, the D line, the button, the line under it, GTC-487's two paragraphs, the explainer, the button again; nothing more",
     test: (i) => {
       const section = element(i.on, 'data-demo-explainer=""');
+      // [[GTC-487]]: its two paragraphs, between the line under the button and the explainer.
       return (
         section !== '' &&
-        words(i.on) === `${HEADING}${LEAD}${TRY_IT}${START_LINE}${words(section)}${TRY_IT}`
+        words(i.on) ===
+          `${HEADING}${LEAD}${TRY_IT}${START_LINE}${GTC487_STORY}${words(section)}${TRY_IT}`
       );
     },
     breakIt: (i) => html(i, 'on', '</h1>', '</h1><p>Sign up now</p>'),
@@ -360,7 +376,7 @@ const CHECKS: Check[] = [
   {
     layer: 'R',
     label:
-      'R4 the D line sits between the heading and the first button with nothing else; the line under the button is the next thing after it, in the same block',
+      "R4 the D line sits between the heading and the first button with nothing else; the line under the button is the next thing after it, in the same block (then GTC-487's two paragraphs, before the explainer)",
     test: (i) => {
       const h = i.on;
       const btn = tryIts(h);
@@ -375,7 +391,8 @@ const CHECKS: Check[] = [
         words(between) === LEAD &&
         firstBlock !== '' &&
         words(firstBlock) === `${TRY_IT}${START_LINE}` &&
-        words(afterButton) === START_LINE &&
+        // [[GTC-487]]: after the line come its two paragraphs, then the explainer.
+        words(afterButton) === `${START_LINE}${GTC487_STORY}` &&
         /^<p\b[^>]*data-demo-start-line=""[^>]*>/.test(afterButton)
       );
     },
