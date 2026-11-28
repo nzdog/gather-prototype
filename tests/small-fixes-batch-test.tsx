@@ -33,6 +33,17 @@ import {
 
 const ROOT = path.join(__dirname, '..');
 const BASE = '89da9a3'; // origin/main when GTC-488 began (the merge of pull request #128, GTC-482)
+/**
+ * ⚠ [[GTC-488]] (28 Nov 2026, the founder's word on fa987f5: "this ticket's checks that compare
+ * with main read main as now merged in (fa987f5), each moved the narrowest way with a dated note
+ * naming GTC-488"). Main fa987f5 (GTC-487, the potatoes paragraphs, pull requests #129 and #130,
+ * merged first) edits src/app/demo/page.tsx and adds its own script line. So K1 (the edited
+ * source files) and K6 (package.json's one line) compare the working folder with main as merged
+ * in (MERGED_MAIN) instead of with BASE, as GTC-482 moved its K6 and K9 at its own merge. They
+ * still read the working folder, so a later edit still turns them red. Every other check still
+ * compares with BASE.
+ */
+const MERGED_MAIN = 'fa987f5';
 const TAG = `S487${Date.now().toString(36)}`;
 const VAR = 'GATHER_SESSIONS';
 const FIXTURE_FILE =
@@ -144,8 +155,12 @@ const F = {
 /** The nine source files, exactly (the founder's word: "the nine source files as named"). */
 const EDITED = [F.setup, F.surface, F.reading, F.plan, F.skeleton, F.card, F.split, F.wait].sort();
 const NEW_SRC = [F.words];
-/** The new file's bytes, as written (SHA-256). */
-const WORDS_SHA = 'fff72f794e1d59373bfe229717e963451b64271e98a25e42e46db264f8bbe139';
+/**
+ * The new file's bytes, as written (SHA-256). [[GTC-488]] (28 Nov 2026): the renumber (f817121)
+ * changed one line of the file, its first note's [[GTC-487]] to [[GTC-488]], and nothing else;
+ * the bytes as written at 4fad532 were fff72f794e1d5937...
+ */
+const WORDS_SHA = '2c845961091c55fd18f96c8c526d5420a4ad77e608252a62ab70375c0fdf0753';
 
 /**
  * Each edited file's named changes, [was, is], in order, against 89da9a3. The plan view's sixteen
@@ -880,9 +895,12 @@ async function main() {
 
   // ══ K — the files ═══════════════════════════════════════════════════════════════════════
   section('K — exactly these files, and nothing else');
-  const changed = lines(git(['diff', '--name-only', BASE, '--', 'src'])).sort();
+  // [[GTC-488]]: against main as merged in (MERGED_MAIN); see the note there.
+  const changed = lines(git(['diff', '--name-only', MERGED_MAIN, '--', 'src'])).sort();
   const untracked = lines(git(['ls-files', '--others', '--exclude-standard', 'src'])).sort();
-  const added = lines(git(['diff', '--name-only', '--diff-filter=A', BASE, '--', 'src'])).sort();
+  const added = lines(
+    git(['diff', '--name-only', '--diff-filter=A', MERGED_MAIN, '--', 'src'])
+  ).sort();
   check(
     'K1',
     'the edited source files are exactly the eight, and the one new file; nothing untracked',
@@ -954,9 +972,10 @@ async function main() {
       'middleware.ts',
     ])
   );
-  const pkgDiff = lines(git(['diff', '-U0', '--no-color', BASE, '--', 'package.json'])).filter(
-    (l) => /^[+-]/.test(l) && !/^(\+\+\+|---)/.test(l)
-  );
+  // [[GTC-488]]: against main as merged in (MERGED_MAIN); see the note there.
+  const pkgDiff = lines(
+    git(['diff', '-U0', '--no-color', MERGED_MAIN, '--', 'package.json'])
+  ).filter((l) => /^[+-]/.test(l) && !/^(\+\+\+|---)/.test(l));
   check(
     'K6',
     'package.json gains exactly one line, the script, and the line before it gains its comma',
