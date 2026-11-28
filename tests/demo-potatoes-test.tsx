@@ -16,6 +16,13 @@
  *   - It shows only when the demo is switched on.
  *   - No price on /demo. No new tracking of any kind.
  *
+ * And the founder's layout ruling of the same day (verbatim in the ticket): the paragraphs "look
+ * like a triangle, because they are centred". Left-align both, in one block the same width as the
+ * "Try it yourself" button, centred under it, so the text's left edge lines up with the button's;
+ * no balanced wrapping, ordinary wrapping ragged on the right only; the same small grey text and
+ * the same gap between the paragraphs; the words and the rest of the page unchanged. Held by R1
+ * (the block is the button's block's width, neither padded), R3 (the gap) and R4 (the alignment).
+ *
  * Layers:
  *   W  the words, as ruled.
  *   R  the page drawn in Next's request scope with the switch on.
@@ -258,21 +265,35 @@ const CHECKS: Check[] = [
   {
     layer: 'R',
     label:
-      "R1 the place: the paragraphs come straight after the line under the button (its block closes, then theirs opens), in the button's column, and the steps come straight after them",
+      "R1 the place: the paragraphs come straight after the line under the button (its block closes, then theirs opens), and the steps straight after them; the block is the button's width, centred under it: the width classes of the button's own block, the button filling that block, and no side padding or margin on either block or the paragraphs, so the text's left edge is the button's",
     test: (i) => {
       const h = i.on;
       const line = element(h, 'data-demo-start-line=""');
       const story = element(h, 'data-demo-story=""');
       const section = element(h, 'data-demo-explainer=""');
-      if (!line || !story || !section) return false;
+      const start = element(h, 'data-demo-start=""');
+      if (!line || !story || !section || !start) return false;
       const lineEnd = h.indexOf(line) + line.length;
       const storyAt = h.indexOf(story);
-      const own = classes(story.slice(0, story.indexOf('>') + 1));
+      const opening = (el: string) => classes(el.slice(0, el.indexOf('>') + 1));
+      const own = opening(story);
+      const startOwn = opening(start);
+      const button = /<button\b[^>]*>/.exec(start)?.[0] ?? '';
+      // [[GTC-487]] layout ruling: width, centring and side spacing, the same as the button's block.
+      const width = (cs: string[]) =>
+        cs.filter((c) => /^(?:[a-z]+:)*(?:mx-auto|w-|max-w-|min-w-)/.test(c)).sort();
+      const sideSpace = (c: string) =>
+        /^(?:[a-z]+:)*(?:p|px|pl|pr|ps|pe|ml|mr|ms|me)-/.test(c) ||
+        (/^(?:[a-z]+:)*mx-/.test(c) && !/mx-auto$/.test(c));
+      const storyPs = [...story.matchAll(/<p\b[^>]*>/g)].map((m) => m[0]).join('');
       return (
         count(h, 'data-demo-story=""') === 1 &&
         h.slice(lineEnd, storyAt) === '</div>' &&
         storyAt + story.length === h.indexOf(section) &&
-        ['mx-auto', 'w-full', 'max-w-sm'].every((c) => own.includes(c))
+        ['mx-auto', 'w-full', 'max-w-sm'].every((c) => own.includes(c)) &&
+        JSON.stringify(width(own)) === JSON.stringify(width(startOwn)) &&
+        classes(button).includes('w-full') &&
+        ![...own, ...startOwn, ...classes(storyPs)].some(sideSpace)
       );
     },
     breakIt: (i) => {
@@ -304,7 +325,7 @@ const CHECKS: Check[] = [
   {
     layer: 'R',
     label:
-      "R3 quiet body text in the page's style: the explainer introduction's text classes, one size and smaller than the headline's, no serif or bold, every colour already on the page at main; no box (border, background, shadow, ring, rounding) and no picture",
+      "R3 quiet body text in the page's style: the explainer introduction's text classes, one size and smaller than the headline's, no serif or bold, every colour already on the page at main; the steps' gap between the two paragraphs (space-y-3); no box (border, background, shadow, ring, rounding) and no picture",
     test: (i) => {
       const story = element(i.on, 'data-demo-story=""');
       const lead = element(i.on, 'data-demo-lead=""');
@@ -315,6 +336,8 @@ const CHECKS: Check[] = [
       const mainCode = `${i.basePage}\n${i.kept[EXPLAINER].base}`;
       return (
         BODY_TEXT.every((c) => cs.includes(c)) &&
+        // [[GTC-487]] layout ruling: "the same gap between the two paragraphs".
+        cs.includes('space-y-3') &&
         sizes.length === 1 &&
         !!leadSize &&
         SIZES.indexOf(sizes[0]) < SIZES.indexOf(leadSize) &&
@@ -326,6 +349,29 @@ const CHECKS: Check[] = [
     },
     breakIt: (i) =>
       html(i, 'on', 'data-demo-story=""', 'data-demo-story="" style="" class="rounded-xl border"'),
+  },
+  {
+    layer: 'R',
+    label:
+      "R4 the layout (founder, 28 Nov 2026): the paragraphs' text left-aligned, ordinary wrapping ragged on the right: the block says text-left, and neither it nor its paragraphs centre, right-align, justify or balance; the line under the button stays centred",
+    test: (i) => {
+      const story = element(i.on, 'data-demo-story=""');
+      const line = element(i.on, 'data-demo-start-line=""');
+      if (!story || !line) return false;
+      const own = classes(story.slice(0, story.indexOf('>') + 1));
+      const all = classes(story);
+      return (
+        own.includes('text-left') &&
+        !all.some((c) =>
+          /^(?:[a-z]+:)*(?:text-(?:center|right|justify|end|balance|pretty|nowrap)|whitespace-)/.test(
+            c
+          )
+        ) &&
+        !classes(line).includes('text-left')
+      );
+    },
+    breakIt: (i) =>
+      html(i, 'on', 'data-demo-story=""', 'data-demo-story="" style="" class="text-balance"'),
   },
 
   // O — drawn with the switch off.
