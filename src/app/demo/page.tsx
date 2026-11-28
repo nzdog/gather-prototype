@@ -70,6 +70,10 @@ const STORY_GATHER =
  * text, smaller than the headline, in the page's existing style. No box, no picture, no new
  * colour." Held by tests/demo-potatoes-test.tsx.
  *
+ * [[GTC-487]] layout (founder ruling, 28 Nov 2026): centred, the two paragraphs "look like a
+ * triangle". Their text is left-aligned in a block the button's width, so its left edge is the
+ * button's, with ordinary wrapping, "ragged on the right only". The lines above stay centred.
+ *
  * The "Sarah demo" button and its handler went with GTC-395; the route's no-body path and the
  * tokens route went with [[GTC-442]]. The reset route still exists, answers 404 in production, and
  * elsewhere force-resets whichever database the server points at; this page never calls it.
@@ -104,7 +108,7 @@ export default async function DemoLandingPage(props: VisitPageProps) {
               </div>
               <div
                 data-demo-story=""
-                className="mx-auto mt-3 w-full max-w-sm space-y-3 text-sm leading-relaxed text-balance text-warm-grey-700"
+                className="mx-auto mt-3 w-full max-w-sm space-y-3 text-left text-sm leading-relaxed text-warm-grey-700"
               >
                 <p>{STORY}</p>
                 <p>{STORY_GATHER}</p>
